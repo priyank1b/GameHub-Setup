@@ -27,6 +27,10 @@ let isQuitting = false;
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 function createWindow() {
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'assets', 'icon.png')
+    : path.join(__dirname, '../assets/icon.png');
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -34,6 +38,7 @@ function createWindow() {
     minHeight: 680,
     backgroundColor: '#09090b',
     title: 'GameHub',
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     show: false,
     webPreferences: {
       nodeIntegration: false,

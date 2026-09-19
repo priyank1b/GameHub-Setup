@@ -16,6 +16,7 @@ asarUnpack:
   - "**/better-sqlite3/**"
 
 win:
+  icon: assets/icon.ico
   target:
     - target: dir
       arch:
@@ -30,4 +31,7 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: GameHub
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
   artifactName: "GameHub-Setup.exe"
