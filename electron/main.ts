@@ -1,6 +1,14 @@
 import { app, BrowserWindow, protocol, net } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
+
+process.on('uncaughtException', (err) => {
+  try {
+    const logPath = path.join(app.getPath('appData'), 'GameHub', 'logs', 'gamehub.log');
+    fs.appendFileSync(logPath, `[FATAL] Uncaught exception: ${err?.stack || err}\n`);
+  } catch {}
+});
 
 // Register privileged custom protocol for local image assets
 protocol.registerSchemesAsPrivileged([
@@ -93,6 +101,20 @@ function createWindow() {
     }
   });
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+      Logger.info('App', 'Window displayed via did-finish-load fallback.');
+    }
+  });
+
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    Logger.error('App', `Failed to load ${validatedURL}: [${errorCode}] ${errorDescription}`);
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+  });
+
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
@@ -114,9 +136,22 @@ app.on('before-quit', () => {
   isQuitting = true;
 });
 
-app.whenReady().then(() => {
-  Logger.init();
-  Logger.info('App', `Application ready. Packaged: ${app.isPackaged}`);
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  app.whenReady().then(() => {
+    Logger.init();
+    Logger.info('App', `Application ready. Packaged: ${app.isPackaged}`);
 
   // Handle local media loading without CORS/CSP restrictions
   protocol.handle('media', (request) => {
@@ -182,3 +217,4 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+}
