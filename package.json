@@ -1,7 +1,7 @@
 {
   "name": "gamehub",
   "version": "1.0.0",
-  "author": "Priyank & GameHub Team",
+  "author": "GameHub Team",
   "license": "MIT",
   "description": "Unified PC Game Library & Launcher",
   "main": "dist-electron/main.js",

@@ -60,7 +60,9 @@ app.whenReady().then(async () => {
   console.log('3-Dot Menu Test Result:', result);
 
   const img = await win.capturePage();
-  fs.writeFileSync('C:/Users/priyank/.gemini/antigravity-ide/brain/4bb9e622-aaca-43ea-a076-403ddbe03408/3dots_fixed.png', img.toPNG());
+  const outDir = path.join(__dirname, 'artifacts');
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(path.join(outDir, '3dots_fixed.png'), img.toPNG());
   console.log('Screenshot saved to 3dots_fixed.png');
 
   win.close();

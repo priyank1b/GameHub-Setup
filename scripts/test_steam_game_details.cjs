@@ -2,7 +2,7 @@ const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-const ARTIFACTS_DIR = 'C:\\Users\\priyank\\.gemini\\antigravity-ide\\brain\\4bb9e622-aaca-43ea-a076-403ddbe03408';
+const ARTIFACTS_DIR = path.join(__dirname, 'artifacts');
 
 async function testOvercooked2Details() {
   const { initDatabase, closeDatabase } = await import('../dist-electron/database/index.js');

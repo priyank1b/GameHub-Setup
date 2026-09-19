@@ -40,7 +40,9 @@ app.whenReady().then(async () => {
   await new Promise((r) => setTimeout(r, 800));
 
   const img = await win.capturePage();
-  fs.writeFileSync('C:/Users/priyank/.gemini/antigravity-ide/brain/4bb9e622-aaca-43ea-a076-403ddbe03408/3dots_visible_test.png', img.toPNG());
+  const outDir = path.join(__dirname, 'artifacts');
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(path.join(outDir, '3dots_visible_test.png'), img.toPNG());
   console.log('Saved 3dots_visible_test.png');
 
   win.close();

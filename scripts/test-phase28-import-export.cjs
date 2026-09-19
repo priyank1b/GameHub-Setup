@@ -2,7 +2,7 @@ const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-const ARTIFACTS_DIR = 'C:\\Users\\priyank\\.gemini\\antigravity-ide\\brain\\4bb9e622-aaca-43ea-a076-403ddbe03408';
+const ARTIFACTS_DIR = path.join(__dirname, 'artifacts');
 const TEST_BACKUP_PATH = path.resolve(__dirname, '../test-gamehub-backup.json');
 
 async function testPhase28() {
