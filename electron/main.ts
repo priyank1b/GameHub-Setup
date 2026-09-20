@@ -48,6 +48,7 @@ function createWindow() {
     title: 'GameHub',
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
     autoHideMenuBar: true,
+    frame: false,
     show: false,
     webPreferences: {
       nodeIntegration: false,
@@ -62,6 +63,14 @@ function createWindow() {
   mainWindow.removeMenu();
   mainWindow.setMenuBarVisibility(false);
   Menu.setApplicationMenu(null);
+
+  // Broadcast window maximize state changes to renderer
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('window:maximizeChange', true);
+  });
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('window:maximizeChange', false);
+  });
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();

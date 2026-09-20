@@ -102,4 +102,18 @@ contextBridge.exposeInMainWorld('gameHub', {
       };
     },
   },
+
+  window: {
+    minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
+    maximize: (): Promise<boolean> => ipcRenderer.invoke('window:maximize'),
+    close: (): Promise<void> => ipcRenderer.invoke('window:close'),
+    isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
+    onMaximizedChange: (callback: (isMax: boolean) => void): (() => void) => {
+      const listener = (_event: any, isMax: boolean) => callback(isMax);
+      ipcRenderer.on('window:maximizeChange', listener);
+      return () => {
+        ipcRenderer.removeListener('window:maximizeChange', listener);
+      };
+    },
+  },
 });
