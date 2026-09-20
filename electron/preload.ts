@@ -3,7 +3,7 @@ import { Game } from '../src/types/Game';
 
 // Expose safe, strongly-typed API bridge to the renderer process
 contextBridge.exposeInMainWorld('gameHub', {
-  appVersion: '1.0.1',
+  appVersion: '1.0.2',
   platform: process.platform,
   ping: () => 'pong',
 
