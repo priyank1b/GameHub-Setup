@@ -11,6 +11,7 @@ import { registerDriveHandlers } from './driveHandlers';
 import { registerDialogHandlers } from './dialogHandlers';
 import { registerScannerHandlers } from './scannerHandlers';
 import { registerBackupHandlers } from './backupHandlers';
+import { registerWindowHandlers } from './windowHandlers';
 
 import { DriveService } from '../services/DriveService';
 import { GameLauncher } from '../services/GameLauncher';
@@ -29,6 +30,7 @@ export function registerAllIpcHandlers(db: Database): void {
   registerDialogHandlers();
   registerScannerHandlers(gameRepo, settingsRepo, driveService);
   registerBackupHandlers(gameRepo, categoryRepo, settingsRepo);
+  registerWindowHandlers();
 
   console.log('[IPC] All secure IPC handlers registered successfully.');
 }

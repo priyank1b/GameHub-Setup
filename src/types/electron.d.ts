@@ -101,6 +101,14 @@ export interface GameHubBridge {
     onNavigate: (callback: (page: string) => void) => () => void;
     onRescan: (callback: () => void) => () => void;
   };
+
+  window?: {
+    minimize: () => Promise<void>;
+    maximize: () => Promise<boolean>;
+    close: () => Promise<void>;
+    isMaximized: () => Promise<boolean>;
+    onMaximizedChange: (callback: (isMax: boolean) => void) => () => void;
+  };
 }
 
 declare global {

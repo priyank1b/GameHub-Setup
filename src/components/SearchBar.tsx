@@ -31,7 +31,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   };
 
   return (
-    <div className={`relative flex items-center w-full max-w-md ${className}`}>
+    <div className={`relative flex items-center w-full max-w-md no-drag ${className}`}>
       <Search className="absolute left-3.5 w-4 h-4 text-zinc-500 pointer-events-none" />
       <input
         id="global-search-input"
