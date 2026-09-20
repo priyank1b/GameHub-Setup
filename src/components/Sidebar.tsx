@@ -40,11 +40,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className="w-64 flex-shrink-0 bg-surface-900 border-r border-zinc-800/80 flex flex-col justify-between select-none h-screen sticky top-0">
       {/* Brand Header */}
       <div>
-        <div className="h-16 px-6 flex items-center gap-3 border-b border-zinc-800/80">
-          <div className="p-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400">
+        <div
+          onDoubleClick={() => window.gameHub?.window?.maximize()}
+          className="h-16 px-6 flex items-center gap-3 border-b border-zinc-800/80 drag-region"
+        >
+          <div className="p-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 no-drag">
             <Gamepad2 className="w-6 h-6" />
           </div>
-          <div>
+          <div className="no-drag">
             <h1 className="font-bold text-lg text-white font-['Outfit'] tracking-tight">
               {APP_CONFIG.name}
             </h1>
