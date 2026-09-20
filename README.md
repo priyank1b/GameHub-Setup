@@ -1,6 +1,6 @@
 # GameHub 🎮 — Unified PC Game Library & Launcher
 
-[![Release](https://img.shields.io/badge/release-v1.0.1-teal.svg)](https://github.com/priyank1b/GameHub-Setup/releases)
+[![Release](https://img.shields.io/badge/release-v1.0.2-teal.svg)](https://github.com/priyank1b/GameHub-Setup/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](https://github.com/priyank1b/GameHub-Setup)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Framework](https://img.shields.io/badge/Electron-33.x-47848F.svg)](https://www.electronjs.org/)
