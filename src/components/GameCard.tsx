@@ -336,7 +336,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
                     zIndex: 9999,
                     transform: 'none',
                   }}
-                  className="w-48 rounded-xl bg-[#18181b] border border-zinc-700 shadow-2xl py-1.5 text-xs text-zinc-200 antialiased select-none"
+                  className="w-48 rounded-xl bg-[#18181b] border border-zinc-700 shadow-2xl py-1.5 text-[13px] text-zinc-100 antialiased select-none"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* 1. View Details */}
