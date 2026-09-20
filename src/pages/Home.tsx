@@ -2,7 +2,7 @@ import React from 'react';
 import { Game } from '../types/Game';
 import { GameGrid } from '../components/GameGrid';
 import { PlayButton } from '../components/PlayButton';
-import { Sparkles, Clock, Gamepad2, Layers, HardDrive } from 'lucide-react';
+import { Sparkles, Clock, Gamepad2, Layers, HardDrive, Database } from 'lucide-react';
 import { PageRoute } from '../types/Navigation';
 
 import { formatImageUrl } from '../utils/formatImage';
@@ -62,6 +62,14 @@ export const Home: React.FC<HomeProps> = ({
       ? `${Math.ceil(totalPlaySeconds / 60)} mins`
       : '0 hrs';
 
+  const totalSizeBytes = games.reduce((acc, g) => acc + (g.installedSize || 0), 0);
+  const totalStorageDisplay =
+    totalSizeBytes >= 1024 * 1024 * 1024 * 1024
+      ? `${(totalSizeBytes / (1024 * 1024 * 1024 * 1024)).toFixed(2)} TB`
+      : totalSizeBytes > 0
+      ? `${(totalSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+      : '0 GB';
+
   const featuredGame =
     games.find((g) => g.lastPlayedAt) || games.find((g) => g.isFavorite) || games[0] || null;
 
@@ -118,7 +126,8 @@ export const Home: React.FC<HomeProps> = ({
       )}
 
       {/* Quick Overview Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Installed Games */}
         <div className="p-5 rounded-2xl bg-surface-850 border border-zinc-800/80 flex items-center gap-4">
           <div className="p-3 rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20">
             <Gamepad2 className="w-6 h-6" />
@@ -129,6 +138,7 @@ export const Home: React.FC<HomeProps> = ({
           </div>
         </div>
 
+        {/* Total Playtime */}
         <div className="p-5 rounded-2xl bg-surface-850 border border-zinc-800/80 flex items-center gap-4">
           <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
             <Clock className="w-6 h-6" />
@@ -139,6 +149,18 @@ export const Home: React.FC<HomeProps> = ({
           </div>
         </div>
 
+        {/* Storage Utilized */}
+        <div className="p-5 rounded-2xl bg-surface-850 border border-zinc-800/80 flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            <Database className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs text-zinc-400 uppercase tracking-wider font-medium">Storage Utilized</p>
+            <p className="text-2xl font-bold text-white font-['Outfit']">{totalStorageDisplay}</p>
+          </div>
+        </div>
+
+        {/* Drives Detected */}
         <div className="p-5 rounded-2xl bg-surface-850 border border-zinc-800/80 flex items-center gap-4">
           <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
             <HardDrive className="w-6 h-6" />

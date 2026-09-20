@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net } from 'electron';
+import { app, BrowserWindow, protocol, net, Menu } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -47,6 +47,7 @@ function createWindow() {
     backgroundColor: '#09090b',
     title: 'GameHub',
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
+    autoHideMenuBar: true,
     show: false,
     webPreferences: {
       nodeIntegration: false,
@@ -57,6 +58,10 @@ function createWindow() {
       allowRunningInsecureContent: false,
     },
   });
+
+  mainWindow.removeMenu();
+  mainWindow.setMenuBarVisibility(false);
+  Menu.setApplicationMenu(null);
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();

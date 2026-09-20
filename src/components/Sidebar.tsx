@@ -5,7 +5,6 @@ import {
   Star,
   Clock,
   HardDrive,
-  Settings,
   Gamepad2,
   ChevronDown,
   Sparkles,
@@ -194,24 +193,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           </div>
         </nav>
-      </div>
-
-      {/* Footer Settings Button */}
-      <div className="p-4 border-t border-zinc-800/80 bg-surface-900">
-        <button
-          type="button"
-          onClick={() => onNavigate('settings')}
-          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            currentPage === 'settings'
-              ? 'bg-teal-500 text-zinc-950 font-bold shadow-lg shadow-teal-500/20'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <Settings className="w-4 h-4" />
-            <span>SETTINGS</span>
-          </div>
-        </button>
       </div>
     </aside>
   );
