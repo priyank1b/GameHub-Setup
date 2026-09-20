@@ -2,6 +2,19 @@
 
 All notable changes to GameHub are documented in this file.
 
+## [1.0.2] - 2026-09-20
+
+### Fixed — Card Context Menu Clarity & Typography
+- **Crisp Portal Rendering**:
+  - Detached the game card 3-dots options menu from the card DOM tree using React Portals (`createPortal(..., document.body)`).
+  - Eliminates sub-pixel bitmap scaling and blur caused by card hover and focus transforms (`scale-[1.02] -translate-y-1.5`).
+- **Surface & Antialiasing Optimization**:
+  - Replaced semi-transparent `backdrop-blur-xl` on the context menu with an opaque, solid dark surface (`#18181b` with `border border-zinc-700` and `shadow-2xl`) to eliminate edge halo blur.
+  - Enabled system-wide font antialiasing (`-webkit-font-smoothing: antialiased`, `-moz-osx-font-smoothing: grayscale`, and `text-rendering: optimizeLegibility`).
+  - Upgraded menu typography to `13px font-medium text-zinc-100` for crisp, high-contrast readability.
+
+---
+
 ## [1.0.1] - 2026-09-20
 
 ### Added — Full Game Controller & Gamepad Support
