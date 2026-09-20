@@ -611,7 +611,6 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
 
           <div className="pt-4 border-t border-zinc-800 text-xs text-zinc-500 flex items-center justify-between">
             <span>{APP_CONFIG.name} v{APP_CONFIG.version}</span>
-            <span className="font-mono">SQLite Local Persistent Engine</span>
           </div>
         </div>
       )}
