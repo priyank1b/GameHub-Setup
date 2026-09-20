@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Game } from '../types/Game';
 import { LauncherBadge } from './LauncherBadge';
 import { FavoriteButton } from './FavoriteButton';
@@ -44,6 +45,30 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
   const [currentSrc, setCurrentSrc] = useState(formatImageUrl(game.coverImage));
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top?: number; bottom?: number; right: number }>({ right: 0 });
+
+  const handleToggleMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!menuOpen && menuButtonRef.current) {
+      const rect = menuButtonRef.current.getBoundingClientRect();
+      const openUpwards = rect.top > 250;
+      if (openUpwards) {
+        setMenuPos({
+          bottom: Math.round(window.innerHeight - rect.top + 6),
+          right: Math.round(window.innerWidth - rect.right),
+        });
+      } else {
+        setMenuPos({
+          top: Math.round(rect.bottom + 6),
+          right: Math.round(window.innerWidth - rect.right),
+        });
+      }
+      setMenuOpen(true);
+    } else {
+      setMenuOpen(false);
+    }
+  };
 
   const isMissing = !game.isInstalled;
 
@@ -84,15 +109,29 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(target) &&
+        menuButtonRef.current &&
+        !menuButtonRef.current.contains(target)
+      ) {
         setMenuOpen(false);
       }
     };
+    const handleClose = () => {
+      setMenuOpen(false);
+    };
+
     if (menuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('scroll', handleClose, true);
+      window.addEventListener('resize', handleClose);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleClose, true);
+      window.removeEventListener('resize', handleClose);
     };
   }, [menuOpen]);
 
@@ -273,118 +312,131 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
             {game.name}
           </h3>
 
-          <div ref={menuRef} className="relative">
+          <div className="relative">
             <button
+              ref={menuButtonRef}
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(!menuOpen);
-              }}
+              onClick={handleToggleMenu}
               className="text-zinc-500 hover:text-zinc-300 p-0.5 rounded transition-colors cursor-pointer"
               title="More Options"
             >
               <MoreVertical className="w-4 h-4" />
             </button>
 
-            {/* Context Dropdown Menu - opens upwards so it is never clipped */}
-            {menuOpen && (
-              <div
-                className="absolute right-0 bottom-full mb-2 w-48 rounded-2xl bg-surface-800 border border-zinc-700 shadow-2xl py-1.5 z-50 text-xs backdrop-blur-xl"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* 1. View Details */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onClick?.(game);
+            {/* Context Dropdown Menu - rendered via Portal to avoid scale transforms and sub-pixel blur */}
+            {menuOpen &&
+              createPortal(
+                <div
+                  ref={menuRef}
+                  style={{
+                    position: 'fixed',
+                    bottom: menuPos.bottom,
+                    top: menuPos.top,
+                    right: menuPos.right,
+                    zIndex: 9999,
+                    transform: 'none',
                   }}
-                  className="w-full text-left px-3 py-2 text-zinc-200 hover:bg-zinc-700/60 flex items-center gap-2.5 transition-colors cursor-pointer"
+                  className="w-48 rounded-xl bg-[#18181b] border border-zinc-700 shadow-2xl py-1.5 text-[13px] text-zinc-100 antialiased select-none"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <Info className="w-3.5 h-3.5 text-teal-400" />
-                  <span>View Details</span>
-                </button>
-
-                {/* 2. Play or Locate */}
-                {isMissing ? (
+                  {/* 1. View Details */}
                   <button
                     type="button"
                     onClick={() => {
                       setMenuOpen(false);
-                      onLocate?.(game);
+                      onClick?.(game);
                     }}
-                    className="w-full text-left px-3 py-2 text-amber-300 hover:bg-amber-500/20 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                    className="w-full text-left px-3 py-2 text-zinc-100 hover:bg-zinc-800 flex items-center gap-2.5 transition-colors cursor-pointer font-medium"
                   >
-                    <FolderSearch className="w-3.5 h-3.5" />
-                    <span>Locate Game...</span>
+                    <Info className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                    <span>View Details</span>
                   </button>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onLaunch?.(game);
-                      }}
-                      className="w-full text-left px-3 py-2 text-zinc-200 hover:bg-zinc-700/60 flex items-center gap-2.5 transition-colors cursor-pointer"
-                    >
-                      <Play className="w-3.5 h-3.5 text-teal-400 fill-teal-400/40" />
-                      <span>Play Game</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        window.gameHub?.games?.openFolder(game.id);
-                      }}
-                      className="w-full text-left px-3 py-2 text-zinc-200 hover:bg-zinc-700/60 flex items-center gap-2.5 transition-colors cursor-pointer"
-                    >
-                      <FolderOpen className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>Open Folder</span>
-                    </button>
+
+                  {/* 2. Play or Locate */}
+                  {isMissing ? (
                     <button
                       type="button"
                       onClick={() => {
                         setMenuOpen(false);
                         onLocate?.(game);
                       }}
-                      className="w-full text-left px-3 py-2 text-zinc-200 hover:bg-zinc-700/60 flex items-center gap-2.5 transition-colors cursor-pointer"
+                      className="w-full text-left px-3 py-2 text-amber-300 hover:bg-amber-500/20 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
                     >
-                      <Compass className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>Re-locate Game...</span>
+                      <FolderSearch className="w-3.5 h-3.5 shrink-0" />
+                      <span>Locate Game...</span>
                     </button>
-                  </>
-                )}
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onLaunch?.(game);
+                        }}
+                        className="w-full text-left px-3 py-2 text-zinc-100 hover:bg-zinc-800 flex items-center gap-2.5 transition-colors cursor-pointer font-medium"
+                      >
+                        <Play className="w-3.5 h-3.5 text-teal-400 fill-teal-400/40 shrink-0" />
+                        <span>Play Game</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          window.gameHub?.games?.openFolder(game.id);
+                        }}
+                        className="w-full text-left px-3 py-2 text-zinc-100 hover:bg-zinc-800 flex items-center gap-2.5 transition-colors cursor-pointer font-medium"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                        <span>Open Folder</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onLocate?.(game);
+                        }}
+                        className="w-full text-left px-3 py-2 text-zinc-100 hover:bg-zinc-800 flex items-center gap-2.5 transition-colors cursor-pointer font-medium"
+                      >
+                        <Compass className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                        <span>Re-locate Game...</span>
+                      </button>
+                    </>
+                  )}
 
-                {/* 3. Favorite */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onToggleFavorite?.(game.id);
-                  }}
-                  className="w-full text-left px-3 py-2 text-zinc-200 hover:bg-zinc-700/60 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <Star className={`w-3.5 h-3.5 ${game.isFavorite ? 'text-amber-400 fill-amber-400' : 'text-zinc-400'}`} />
-                  <span>{game.isFavorite ? 'Unfavorite' : 'Add to Favorites'}</span>
-                </button>
+                  {/* 3. Favorite */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onToggleFavorite?.(game.id);
+                    }}
+                    className="w-full text-left px-3 py-2 text-zinc-100 hover:bg-zinc-800 flex items-center gap-2.5 transition-colors cursor-pointer font-medium"
+                  >
+                    <Star
+                      className={`w-3.5 h-3.5 shrink-0 ${
+                        game.isFavorite ? 'text-amber-400 fill-amber-400' : 'text-zinc-400'
+                      }`}
+                    />
+                    <span>{game.isFavorite ? 'Unfavorite' : 'Add to Favorites'}</span>
+                  </button>
 
-                <div className="my-1 border-t border-zinc-700/60" />
+                  <div className="my-1 border-t border-zinc-700/60" />
 
-                {/* 4. Remove */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onRemove?.(game);
-                  }}
-                  className="w-full text-left px-3 py-2 text-rose-400 hover:bg-rose-500/20 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Remove from Library</span>
-                </button>
-              </div>
-            )}
+                  {/* 4. Remove */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onRemove?.(game);
+                    }}
+                    className="w-full text-left px-3 py-2 text-rose-400 hover:bg-rose-500/20 flex items-center gap-2.5 transition-colors cursor-pointer font-medium"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>Remove from Library</span>
+                  </button>
+                </div>,
+                document.body
+              )}
           </div>
         </div>
 
