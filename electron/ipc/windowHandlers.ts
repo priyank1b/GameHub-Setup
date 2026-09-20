@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
+import { SettingsRepository } from '../database/SettingsRepository';
 
-export function registerWindowHandlers(): void {
+export function registerWindowHandlers(settingsRepo?: SettingsRepository): void {
   ipcMain.handle('window:minimize', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     win?.minimize();

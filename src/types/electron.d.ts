@@ -108,6 +108,7 @@ export interface GameHubBridge {
     close: () => Promise<void>;
     isMaximized: () => Promise<boolean>;
     onMaximizedChange: (callback: (isMax: boolean) => void) => () => void;
+    onRestored?: (callback: () => void) => () => void;
   };
 }
 

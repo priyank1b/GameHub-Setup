@@ -10,6 +10,11 @@ process.on('uncaughtException', (err) => {
   } catch {}
 });
 
+// Disable Windows native occlusion calculation and occluded window backgrounding
+// Chromium bug: Windows DWM fails to signal occlusion updates for restored frameless windows, causing the UI to freeze
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+
 // Register privileged custom protocol for local image assets
 protocol.registerSchemesAsPrivileged([
   {
@@ -57,6 +62,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       webSecurity: true,
       allowRunningInsecureContent: false,
+      backgroundThrottling: false,
     },
   });
 
@@ -64,15 +70,23 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   Menu.setApplicationMenu(null);
 
-  // Broadcast window maximize state changes to renderer
+  // Broadcast window maximize state changes to renderer and persist state
   mainWindow.on('maximize', () => {
     mainWindow?.webContents.send('window:maximizeChange', true);
+    settingsRepo?.set('window_is_maximized', true);
+    trayService?.setWasMaximized(true);
   });
   mainWindow.on('unmaximize', () => {
     mainWindow?.webContents.send('window:maximizeChange', false);
+    settingsRepo?.set('window_is_maximized', false);
+    trayService?.setWasMaximized(false);
   });
 
   mainWindow.once('ready-to-show', () => {
+    const isMax = settingsRepo?.get<boolean>('window_is_maximized', false) ?? false;
+    if (isMax) {
+      mainWindow?.maximize();
+    }
     mainWindow?.show();
     console.log('[GameHub] Window ready-to-show event fired successfully.');
 
@@ -86,21 +100,13 @@ function createWindow() {
     }
   });
 
-  // Minimize to tray if enabled
-  mainWindow.on('minimize', (event: Electron.Event) => {
-    const minimizeToTray = settingsRepo?.get<boolean>('minimize_to_tray', true) ?? true;
-    if (minimizeToTray) {
-      event.preventDefault();
-      mainWindow?.hide();
-    }
-  });
-
-  // Close to tray if enabled and not explicitly quitting
+  // Close to tray if enabled and not explicitly quitting (Minimize keeps app in taskbar)
   mainWindow.on('close', (event: Electron.Event) => {
     if (!isQuitting) {
       const minimizeToTray = settingsRepo?.get<boolean>('minimize_to_tray', true) ?? true;
       if (minimizeToTray) {
         event.preventDefault();
+        trayService?.setWasMaximized(mainWindow?.isMaximized() ?? false);
         mainWindow?.hide();
         return false;
       }
@@ -156,10 +162,15 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       if (!mainWindow.isVisible()) mainWindow.show();
       mainWindow.focus();
+      mainWindow.webContents.focus();
+      if (process.platform === 'win32') {
+        mainWindow.webContents.invalidate();
+      }
+      mainWindow.webContents.send('window:restored');
     }
   });
 

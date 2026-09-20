@@ -1,6 +1,6 @@
 # GameHub 🎮 — Unified PC Game Library & Launcher
 
-[![Release](https://img.shields.io/badge/release-v1.0.0-teal.svg)](https://github.com/priyank1b/GameHub-Setup/releases)
+[![Release](https://img.shields.io/badge/release-v1.0.1-teal.svg)](https://github.com/priyank1b/GameHub-Setup/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](https://github.com/priyank1b/GameHub-Setup)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Framework](https://img.shields.io/badge/Electron-33.x-47848F.svg)](https://www.electronjs.org/)
@@ -14,6 +14,11 @@
 
 ## ✨ Features
 
+- 🎮 **Full Gamepad & Controller Support (v1.0.1)**:
+  - Plug-and-play support for Xbox, PlayStation (DualShock/DualSense), and generic PC gamepads.
+  - 2D spatial navigation across library, sidebar, search, tabs, filters, and modal dialogs.
+  - Automatic focus trapping, edge debouncing, and dead-zone filtering.
+  - Boundary isolation: automatically suspends controller input upon game launch so the running game receives exclusive controller access.
 - 🖥️ **Unified Multi-Launcher Library**: Discovers and centralizes games from:
   - **Steam** (ACF manifest parser across all Steam library folders)
   - **Epic Games Store** (`.item` manifests & catalog integration)
@@ -44,8 +49,9 @@
   - Automated PRAGMA database integrity checks, repair tools (`REINDEX`, `VACUUM`), and atomic snapshot backups.
   - Persistent rotating logs saved to `%APPDATA%/GameHub/logs/gamehub.log`.
   - JSON library export & import for cross-machine backup.
-- 🔔 **System Tray & Hotkeys**:
-  - Minimizes to the Windows System Tray for instant background access.
+- 🔔 **System Tray & Window Management**:
+  - Closes cleanly to the Windows System Tray for instant background access, while minimize keeps it accessible on the taskbar.
+  - Remembers maximized and aspect ratio state across tray toggles and app launches.
   - Keyboard shortcuts (`Ctrl+K` for search, `Ctrl+R` to rescan, `Escape` to close modals).
 
 ---
@@ -147,6 +153,20 @@ Extract the `win-unpacked` folder and run `GameHub.exe` directly without install
 | `Ctrl + R` | Trigger quick library rescan |
 | `Escape` | Close active modal or clear search |
 | `Enter` | Launch selected game |
+
+---
+
+## 🎮 Gamepad & Controller Navigation (v1.0.1)
+
+| Button / Input | UI Action |
+| :--- | :--- |
+| **D-Pad / Left Stick** | 2D Spatial UI navigation across game cards, sidebar, tabs, and modals |
+| **Right Stick / Triggers (LT/RT)** | Smooth analog scrolling and fast page-up/page-down through modal text |
+| **A / Cross / Start** | Play / Launch selected game, or confirm action |
+| **B / Circle** | Back / Close active modal / Cancel |
+| **X / Square** | Toggle Favorite for selected game |
+| **Y / Triangle** | View game details & description / Open game context menu / Search |
+| **LB / RB (Bumpers)** | Cycle sections (Home ↔ Library ↔ Favorites ↔ Recently Played ↔ Drives ↔ Settings) |
 
 ---
 

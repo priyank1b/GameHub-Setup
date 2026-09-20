@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import { formatImageUrl } from '../utils/formatImage';
+import { useFocusable } from '../hooks/useFocusable';
 
 interface GameCardProps {
   game: Game;
@@ -45,6 +46,36 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isMissing = !game.isInstalled;
+
+  const { ref: focusRef, isFocused } = useFocusable<HTMLDivElement>({
+    id: `game-card-${game.id}`,
+    scope: 'main',
+    group: 'grid',
+    onConfirm: () => {
+      // A Button or Enter: Launch game directly if installed; locate if missing
+      if (onLaunch && game.isInstalled) {
+        onLaunch(game);
+      } else if (onLocate && !game.isInstalled) {
+        onLocate(game);
+      } else {
+        onClick?.(game);
+      }
+    },
+    onSecondary: () => {
+      // X Button: Toggle favorite
+      onToggleFavorite?.(game.id);
+    },
+    onMenu: () => {
+      // Y Button / Menu: Open Game Details (description) modal
+      onClick?.(game);
+    },
+  });
+
+  useEffect(() => {
+    if (isFocused) {
+      onFocus?.(game);
+    }
+  }, [isFocused, game, onFocus]);
 
   useEffect(() => {
     setCurrentSrc(formatImageUrl(game.coverImage));
@@ -95,6 +126,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
 
   return (
     <div
+      ref={focusRef}
       tabIndex={0}
       role="button"
       style={{ contentVisibility: 'auto', containIntrinsicSize: '200px 300px' }}
@@ -114,12 +146,16 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
         }
       }}
       onFocus={() => onFocus?.(game)}
-      className={`group relative flex flex-col rounded-2xl bg-surface-850 border transition-all duration-300 hover:shadow-xl hover:-translate-y-1.5 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-900 ${
-        menuOpen ? 'z-40' : 'z-10'
+      className={`group relative flex flex-col rounded-2xl bg-surface-850 border transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-900 ${
+        menuOpen ? 'z-40' : isFocused ? 'z-30' : 'z-10'
       } ${
-        isMissing
-          ? 'border-amber-500/40 hover:border-amber-400 hover:shadow-amber-500/10'
-          : 'border-zinc-800/80 hover:border-teal-500/50 hover:shadow-teal-500/10'
+        isFocused
+          ? isMissing
+            ? 'border-amber-400 shadow-2xl shadow-amber-500/25 -translate-y-1.5 ring-2 ring-amber-400 scale-[1.02]'
+            : 'border-teal-400 shadow-2xl shadow-teal-500/30 -translate-y-1.5 ring-2 ring-teal-400 scale-[1.02]'
+          : isMissing
+          ? 'border-amber-500/40 hover:border-amber-400 hover:shadow-amber-500/10 hover:-translate-y-1.5 hover:shadow-xl hover:scale-[1.02]'
+          : 'border-zinc-800/80 hover:border-teal-500/50 hover:shadow-teal-500/10 hover:-translate-y-1.5 hover:shadow-xl hover:scale-[1.02]'
       }`}
     >
       {/* Cover Artwork Container with 3:4 Aspect Ratio */}
@@ -130,7 +166,9 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
             alt={game.name}
             onError={handleImageError}
             draggable={false}
-            className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 select-none ${
+            className={`w-full h-full object-cover transition-transform duration-500 select-none ${
+              isFocused ? 'scale-105' : 'group-hover:scale-105'
+            } ${
               isMissing ? 'opacity-70 grayscale-[35%]' : ''
             }`}
             loading="lazy"
@@ -143,7 +181,11 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
         )}
 
         {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-surface-900 via-transparent to-black/40 opacity-70 group-hover:opacity-90 transition-opacity pointer-events-none" />
+        <div
+          className={`absolute inset-0 bg-gradient-to-t from-surface-900 via-transparent to-black/40 transition-opacity pointer-events-none ${
+            isFocused ? 'opacity-90' : 'opacity-70 group-hover:opacity-90'
+          }`}
+        />
 
         {/* Top Badges & Actions */}
         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-30 pointer-events-auto">
@@ -165,8 +207,12 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
           />
         </div>
 
-        {/* Hover Quick Action Overlay */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 bg-black/40 backdrop-blur-[2px] pointer-events-none">
+        {/* Hover / Controller Focus Quick Action Overlay */}
+        <div
+          className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 z-20 bg-black/40 backdrop-blur-[2px] ${
+            isFocused ? 'opacity-100 pointer-events-auto' : 'opacity-0 group-hover:opacity-100 pointer-events-none'
+          }`}
+        >
           <div className="pointer-events-auto">
             {isMissing ? (
               <button
@@ -216,7 +262,11 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
             title={game.name}
             className={`font-semibold text-sm transition-colors line-clamp-1 ${
               isMissing
-                ? 'text-zinc-300 group-hover:text-amber-300'
+                ? isFocused
+                  ? 'text-amber-300'
+                  : 'text-zinc-300 group-hover:text-amber-300'
+                : isFocused
+                ? 'text-teal-300'
                 : 'text-zinc-100 group-hover:text-teal-300'
             }`}
           >

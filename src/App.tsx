@@ -11,6 +11,8 @@ import { AddGameModal } from './components/AddGameModal';
 import { GameDetailsModal } from './components/GameDetailsModal';
 import { Game } from './types/Game';
 import { PageRoute, LibraryFilter } from './types/Navigation';
+import { useNavigation } from './context/NavigationContext';
+import { ControllerManager } from './controllers/ControllerManager';
 
 export const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<PageRoute>('home');
@@ -23,6 +25,24 @@ export const App: React.FC = () => {
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [launchMessage, setLaunchMessage] = useState<string | null>(null);
   const [isAddGameOpen, setIsAddGameOpen] = useState<boolean>(false);
+
+  const { setOnTabChange } = useNavigation();
+
+  // Cycle navigation pages with controller bumpers (LB / RB)
+  useEffect(() => {
+    const pages: PageRoute[] = ['home', 'library', 'favorites', 'recently-played', 'drives', 'settings'];
+    setOnTabChange((direction) => {
+      setCurrentPage((prev) => {
+        const idx = pages.indexOf(prev);
+        if (idx === -1) return 'home';
+        const nextIdx =
+          direction === 'NEXT'
+            ? (idx + 1) % pages.length
+            : (idx - 1 + pages.length) % pages.length;
+        return pages[nextIdx];
+      });
+    });
+  }, [setOnTabChange]);
 
   // Load games from SQLite via IPC
   const loadGames = useCallback(async () => {
@@ -77,6 +97,16 @@ export const App: React.FC = () => {
           setLaunchMessage('Scan was cancelled.');
           setTimeout(() => setLaunchMessage(null), 3000);
         }
+      });
+      return unsubscribe;
+    }
+  }, []);
+
+  // Listen for window restoration from system tray to ensure UI responsiveness
+  useEffect(() => {
+    if (window.gameHub?.window?.onRestored) {
+      const unsubscribe = window.gameHub.window.onRestored(() => {
+        ControllerManager.getInstance().resume();
       });
       return unsubscribe;
     }
@@ -175,6 +205,9 @@ export const App: React.FC = () => {
 
     const msg = `Launching ${game.name} via ${game.launcher}...`;
     setLaunchMessage(msg);
+
+    // Phase 10 Boundary: Suspend GameHub controller input so game receives full dedicated controller control
+    ControllerManager.getInstance().suspend();
 
     if (window.gameHub?.games) {
       try {

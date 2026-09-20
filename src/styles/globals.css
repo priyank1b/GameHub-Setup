@@ -43,3 +43,18 @@
 .no-drag {
   -webkit-app-region: no-drag;
 }
+
+/* Controller Focus Rings */
+.controller-focus {
+  outline: none !important;
+  box-shadow: 0 0 0 3px #14b8a6, 0 0 25px rgba(20, 184, 166, 0.6) !important;
+  transform: scale(1.035);
+  z-index: 50 !important;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.controller-focus-subtle {
+  outline: none !important;
+  box-shadow: 0 0 0 3px #14b8a6 !important;
+  z-index: 30 !important;
+}
