@@ -5,7 +5,7 @@ import { LauncherBadge } from '../components/LauncherBadge';
 import { Clock, Calendar, Play, HardDrive, Gamepad2, AlertTriangle } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import { PageRoute } from '../types/Navigation';
-
+import { FocusableItem } from '../components/FocusableItem';
 import { formatImageUrl } from '../utils/formatImage';
 
 interface RecentlyPlayedProps {
@@ -54,70 +54,85 @@ export const RecentlyPlayed: React.FC<RecentlyPlayedProps> = ({
       {recentGames.length > 0 ? (
         <div className="space-y-3">
           {recentGames.map((game, index) => (
-            <div
+            <FocusableItem
               key={game.id}
-              className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl bg-surface-850 border border-zinc-800/80 hover:border-teal-500/40 transition-all hover:bg-zinc-800/40"
+              id={`recent-game-${game.id}`}
+              scope="main"
+              group="recently-played"
+              onConfirm={() => onLaunch(game)}
             >
-              {/* Left Info with Thumbnail */}
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-20 rounded-xl overflow-hidden bg-zinc-900 flex-shrink-0 border border-zinc-800">
-                  {game.coverImage ? (
-                    <img
-                      src={formatImageUrl(game.coverImage)}
-                      alt={game.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-zinc-600">
-                      <Gamepad2 className="w-6 h-6" />
+              {({ ref, isFocused }) => (
+                <div
+                  ref={ref}
+                  className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl bg-surface-850 border transition-all hover:bg-zinc-800/40 cursor-pointer ${
+                    isFocused
+                      ? 'controller-focus border-teal-500'
+                      : 'border-zinc-800/80 hover:border-teal-500/40'
+                  }`}
+                  onClick={() => onLaunch(game)}
+                >
+                  {/* Left Info with Thumbnail */}
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-20 rounded-xl overflow-hidden bg-zinc-900 flex-shrink-0 border border-zinc-800">
+                      {game.coverImage ? (
+                        <img
+                          src={formatImageUrl(game.coverImage)}
+                          alt={game.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                          <Gamepad2 className="w-6 h-6" />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-white font-['Outfit']">{game.name}</h3>
-                    <LauncherBadge launcher={game.launcher} size="sm" />
-                    {!game.isInstalled && (
-                      <span className="inline-flex items-center gap-1 bg-amber-500/90 text-zinc-950 font-bold px-1.5 py-0.5 rounded text-[10px] tracking-wider uppercase shadow-sm">
-                        <AlertTriangle className="w-3 h-3 text-zinc-950" />
-                        Missing
-                      </span>
-                    )}
-                  </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-bold text-white font-['Outfit']">{game.name}</h3>
+                        <LauncherBadge launcher={game.launcher} size="sm" />
+                        {!game.isInstalled && (
+                          <span className="inline-flex items-center gap-1 bg-amber-500/90 text-zinc-950 font-bold px-1.5 py-0.5 rounded text-[10px] tracking-wider uppercase shadow-sm">
+                            <AlertTriangle className="w-3 h-3 text-zinc-950" />
+                            Missing
+                          </span>
+                        )}
+                      </div>
 
-                  <div className="flex items-center gap-3 text-xs text-zinc-400">
-                    <span className="inline-flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-zinc-400" />
-                      {game.lastPlayedAt}
-                    </span>
-                    <span>&bull;</span>
-                    <span className="inline-flex items-center gap-1 text-teal-400">
-                      <Clock className="w-3 h-3" />
-                      {formatPlayTime(game.totalPlayTime)} total
-                    </span>
-                    {game.drive && (
-                      <>
-                        <span>&bull;</span>
-                        <span className="inline-flex items-center gap-1 text-zinc-400">
-                          <HardDrive className="w-3 h-3" />
-                          {game.drive}
+                      <div className="flex items-center gap-3 text-xs text-zinc-400">
+                        <span className="inline-flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-zinc-400" />
+                          {game.lastPlayedAt}
                         </span>
-                      </>
-                    )}
+                        <span>&bull;</span>
+                        <span className="inline-flex items-center gap-1 text-teal-400">
+                          <Clock className="w-3 h-3" />
+                          {formatPlayTime(game.totalPlayTime)} total
+                        </span>
+                        {game.drive && (
+                          <>
+                            <span>&bull;</span>
+                            <span className="inline-flex items-center gap-1 text-zinc-400">
+                              <HardDrive className="w-3 h-3" />
+                              {game.drive}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Quick Play Button */}
+                  <div className="self-end sm:self-center">
+                    <PlayButton
+                      label="PLAY NOW"
+                      size="sm"
+                      onPlay={() => onLaunch(game)}
+                    />
                   </div>
                 </div>
-              </div>
-
-              {/* Right Quick Play Button */}
-              <div className="self-end sm:self-center">
-                <PlayButton
-                  label="PLAY NOW"
-                  size="sm"
-                  onPlay={() => onLaunch(game)}
-                />
-              </div>
-            </div>
+              )}
+            </FocusableItem>
           ))}
         </div>
       ) : (

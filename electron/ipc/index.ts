@@ -30,7 +30,7 @@ export function registerAllIpcHandlers(db: Database): void {
   registerDialogHandlers();
   registerScannerHandlers(gameRepo, settingsRepo, driveService);
   registerBackupHandlers(gameRepo, categoryRepo, settingsRepo);
-  registerWindowHandlers();
+  registerWindowHandlers(settingsRepo);
 
   console.log('[IPC] All secure IPC handlers registered successfully.');
 }

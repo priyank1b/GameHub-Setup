@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Plus, Gamepad2, Folder, Image, Check, AlertCircle } from 'lucide-react';
 import { GameLauncher } from '../types/Launcher';
 import { Game } from '../types/Game';
+import { useNavigation } from '../context/NavigationContext';
+import { FocusableItem } from './FocusableItem';
 
 interface AddGameModalProps {
   isOpen: boolean;
@@ -10,6 +12,7 @@ interface AddGameModalProps {
 }
 
 export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose, onAdd }) => {
+  const { pushModal, popModal } = useNavigation();
   const [name, setName] = useState('');
   const [executablePath, setExecutablePath] = useState('');
   const [installPath, setInstallPath] = useState('');
@@ -17,6 +20,15 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose, onA
   const [coverImage, setCoverImage] = useState('');
   const [backgroundImage, setBackgroundImage] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      pushModal('add-game-modal', 'add-game-submit-btn');
+      return () => {
+        popModal('add-game-modal');
+      };
+    }
+  }, [isOpen, pushModal, popModal]);
 
   if (!isOpen) return null;
 
@@ -143,13 +155,26 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose, onA
               <p className="text-xs text-zinc-400">Register a local game executable into GameHub</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-zinc-500 hover:text-zinc-200 p-1.5 rounded-lg transition-colors cursor-pointer"
+          <FocusableItem
+            id="add-game-close-btn"
+            scope="add-game-modal"
+            group="modal"
+            onConfirm={onClose}
+            onBack={onClose}
           >
-            <X className="w-5 h-5" />
-          </button>
+            {({ ref, isFocused }) => (
+              <button
+                ref={ref}
+                type="button"
+                onClick={onClose}
+                className={`text-zinc-500 hover:text-zinc-200 p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  isFocused ? 'controller-focus' : ''
+                }`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </FocusableItem>
         </div>
 
         {/* Validation Error Banner */}
@@ -284,19 +309,49 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose, onA
 
           {/* Action Buttons */}
           <div className="pt-4 border-t border-zinc-800 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-surface-800 hover:bg-zinc-700 text-zinc-300 font-semibold transition-colors cursor-pointer"
+            <FocusableItem
+              id="add-game-cancel-btn"
+              scope="add-game-modal"
+              group="modal"
+              onConfirm={onClose}
+              onBack={onClose}
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 font-bold shadow-lg shadow-teal-500/20 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              {({ ref, isFocused }) => (
+                <button
+                  ref={ref}
+                  type="button"
+                  onClick={onClose}
+                  className={`px-4 py-2 rounded-xl bg-surface-800 hover:bg-zinc-700 text-zinc-300 font-semibold transition-colors cursor-pointer ${
+                    isFocused ? 'controller-focus' : ''
+                  }`}
+                >
+                  Cancel
+                </button>
+              )}
+            </FocusableItem>
+
+            <FocusableItem
+              id="add-game-submit-btn"
+              scope="add-game-modal"
+              group="modal"
+              onConfirm={() => {
+                const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                document.querySelector('form')?.dispatchEvent(submitEvent);
+              }}
+              onBack={onClose}
             >
-              Add Game
-            </button>
+              {({ ref, isFocused }) => (
+                <button
+                  ref={ref}
+                  type="submit"
+                  className={`px-5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 font-bold shadow-lg shadow-teal-500/20 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${
+                    isFocused ? 'controller-focus' : ''
+                  }`}
+                >
+                  Add Game
+                </button>
+              )}
+            </FocusableItem>
           </div>
         </form>
       </div>

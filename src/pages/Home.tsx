@@ -4,7 +4,7 @@ import { GameGrid } from '../components/GameGrid';
 import { PlayButton } from '../components/PlayButton';
 import { Sparkles, Clock, Gamepad2, Layers, HardDrive, Database } from 'lucide-react';
 import { PageRoute } from '../types/Navigation';
-
+import { FocusableItem } from '../components/FocusableItem';
 import { formatImageUrl } from '../utils/formatImage';
 
 interface HomeProps {
@@ -108,18 +108,42 @@ export const Home: React.FC<HomeProps> = ({
             </p>
 
             <div className="pt-2 flex items-center gap-4">
-              <PlayButton
-                label="RESUME GAME"
-                size="lg"
-                onPlay={() => onLaunch(featuredGame)}
-              />
-              <button
-                type="button"
-                onClick={() => onNavigate('library')}
-                className="px-5 py-3 rounded-xl bg-surface-800/80 hover:bg-zinc-700 text-sm font-semibold text-zinc-200 hover:text-white transition-all border border-zinc-700/60"
+              <FocusableItem
+                id="hero-resume-game"
+                scope="main"
+                group="hero"
+                onConfirm={() => onLaunch(featuredGame)}
               >
-                Browse Library
-              </button>
+                {({ ref, isFocused }) => (
+                  <div ref={ref} className={isFocused ? 'controller-focus rounded-xl' : ''}>
+                    <PlayButton
+                      label="RESUME GAME"
+                      size="lg"
+                      onPlay={() => onLaunch(featuredGame)}
+                    />
+                  </div>
+                )}
+              </FocusableItem>
+
+              <FocusableItem
+                id="hero-browse-library"
+                scope="main"
+                group="hero"
+                onConfirm={() => onNavigate('library')}
+              >
+                {({ ref, isFocused }) => (
+                  <button
+                    ref={ref}
+                    type="button"
+                    onClick={() => onNavigate('library')}
+                    className={`px-5 py-3 rounded-xl bg-surface-800/80 hover:bg-zinc-700 text-sm font-semibold text-zinc-200 hover:text-white transition-all border border-zinc-700/60 ${
+                      isFocused ? 'controller-focus' : ''
+                    }`}
+                  >
+                    Browse Library
+                  </button>
+                )}
+              </FocusableItem>
             </div>
           </div>
         </div>
