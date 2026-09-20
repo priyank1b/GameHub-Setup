@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { LauncherBadge } from './LauncherBadge';
 import { formatImageUrl } from '../utils/formatImage';
+import { useNavigation } from '../context/NavigationContext';
+import { FocusableItem } from './FocusableItem';
 
 interface GameDetailsModalProps {
   game: Game | null;
@@ -41,9 +43,19 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
   onLocate,
   onRemove,
 }) => {
+  const { pushModal, popModal } = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (game) {
+      pushModal('game-details-modal', 'modal-play-btn');
+      return () => {
+        popModal('game-details-modal');
+      };
+    }
+  }, [game, pushModal, popModal]);
 
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -159,6 +171,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
       data-testid="game-details-modal"
     >
       <div
+        id="game-details-modal-scroll"
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl bg-surface-850 border border-zinc-800 shadow-2xl space-y-6"
       >
@@ -177,14 +190,27 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
           <div className="absolute inset-0 bg-gradient-to-t from-surface-850 via-surface-850/60 to-transparent" />
 
           {/* Close button */}
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full bg-black/50 hover:bg-black/80 text-zinc-300 hover:text-white transition-all z-20 cursor-pointer"
-            title="Close"
+          <FocusableItem
+            id="modal-close-btn"
+            scope="game-details-modal"
+            group="modal"
+            onConfirm={onClose}
+            onBack={onClose}
           >
-            <X className="w-5 h-5" />
-          </button>
+            {({ ref, isFocused }) => (
+              <button
+                ref={ref}
+                type="button"
+                onClick={onClose}
+                className={`absolute top-4 right-4 p-2 rounded-full bg-black/50 hover:bg-black/80 text-zinc-300 hover:text-white transition-all z-20 cursor-pointer ${
+                  isFocused ? 'controller-focus' : ''
+                }`}
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </FocusableItem>
 
           {/* Floating Details Header */}
           <div className="absolute bottom-6 left-6 right-6 flex items-end gap-6 z-10">
@@ -244,80 +270,158 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
           <div className="flex items-center gap-3">
             {/* Button 1: PLAY */}
             {isMissing ? (
-              <button
-                type="button"
-                onClick={() => onLocate?.(game)}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-sm tracking-wide shadow-lg shadow-amber-500/20 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              <FocusableItem
+                id="modal-play-btn"
+                scope="game-details-modal"
+                group="modal-actions"
+                onConfirm={() => onLocate?.(game)}
+                onBack={onClose}
               >
-                <FolderSearch className="w-4 h-4 text-zinc-950" />
-                <span>LOCATE GAME</span>
-              </button>
+                {({ ref, isFocused }) => (
+                  <button
+                    ref={ref}
+                    type="button"
+                    onClick={() => onLocate?.(game)}
+                    className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-sm tracking-wide shadow-lg shadow-amber-500/20 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${
+                      isFocused ? 'controller-focus' : ''
+                    }`}
+                  >
+                    <FolderSearch className="w-4 h-4 text-zinc-950" />
+                    <span>LOCATE GAME</span>
+                  </button>
+                )}
+              </FocusableItem>
             ) : (
-              <button
-                type="button"
-                onClick={() => onLaunch(game)}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 font-bold text-sm tracking-wide shadow-lg shadow-teal-500/20 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              <FocusableItem
+                id="modal-play-btn"
+                scope="game-details-modal"
+                group="modal-actions"
+                onConfirm={() => onLaunch(game)}
+                onBack={onClose}
               >
-                <Play className="w-4 h-4 fill-current" />
-                <span>PLAY NOW</span>
-              </button>
+                {({ ref, isFocused }) => (
+                  <button
+                    ref={ref}
+                    type="button"
+                    onClick={() => onLaunch(game)}
+                    className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 font-bold text-sm tracking-wide shadow-lg shadow-teal-500/20 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${
+                      isFocused ? 'controller-focus' : ''
+                    }`}
+                  >
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>PLAY NOW</span>
+                  </button>
+                )}
+              </FocusableItem>
             )}
 
             {/* Button 2: FAVORITE */}
-            <button
-              type="button"
-              onClick={() => onToggleFavorite(game.id)}
-              className={`inline-flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
-                game.isFavorite
-                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                  : 'bg-surface-800 border-zinc-700 text-zinc-300 hover:text-white'
-              }`}
+            <FocusableItem
+              id="modal-favorite-btn"
+              scope="game-details-modal"
+              group="modal-actions"
+              onConfirm={() => onToggleFavorite(game.id)}
+              onBack={onClose}
             >
-              <Star className={`w-4 h-4 ${game.isFavorite ? 'fill-current' : ''}`} />
-              <span>{game.isFavorite ? 'Favorited' : 'Favorite'}</span>
-            </button>
+              {({ ref, isFocused }) => (
+                <button
+                  ref={ref}
+                  type="button"
+                  onClick={() => onToggleFavorite(game.id)}
+                  className={`inline-flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
+                    game.isFavorite
+                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                      : 'bg-surface-800 border-zinc-700 text-zinc-300 hover:text-white'
+                  } ${isFocused ? 'controller-focus' : ''}`}
+                >
+                  <Star className={`w-4 h-4 ${game.isFavorite ? 'fill-current' : ''}`} />
+                  <span>{game.isFavorite ? 'Favorited' : 'Favorite'}</span>
+                </button>
+              )}
+            </FocusableItem>
           </div>
 
           <div className="flex items-center gap-2">
             {/* Button 3: OPEN FOLDER */}
             {!isMissing && (
-              <button
-                type="button"
-                onClick={() => {
+              <FocusableItem
+                id="modal-open-folder-btn"
+                scope="game-details-modal"
+                group="modal-actions"
+                onConfirm={() => {
                   if (window.gameHub?.games?.openFolder) {
                     window.gameHub.games.openFolder(game.id);
                   }
                 }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-300 transition-colors cursor-pointer"
+                onBack={onClose}
               >
-                <FolderOpen className="w-4 h-4 text-zinc-400" />
-                <span>Open Folder</span>
-              </button>
+                {({ ref, isFocused }) => (
+                  <button
+                    ref={ref}
+                    type="button"
+                    onClick={() => {
+                      if (window.gameHub?.games?.openFolder) {
+                        window.gameHub.games.openFolder(game.id);
+                      }
+                    }}
+                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-300 transition-colors cursor-pointer ${
+                      isFocused ? 'controller-focus' : ''
+                    }`}
+                  >
+                    <FolderOpen className="w-4 h-4 text-zinc-400" />
+                    <span>Open Folder</span>
+                  </button>
+                )}
+              </FocusableItem>
             )}
 
             {/* Button 4: EDIT */}
-            <button
-              type="button"
-              onClick={() => setIsEditing(!isEditing)}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-semibold transition-colors cursor-pointer ${
-                isEditing
-                  ? 'bg-teal-500/20 border-teal-500/40 text-teal-300'
-                  : 'bg-surface-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300'
-              }`}
+            <FocusableItem
+              id="modal-edit-btn"
+              scope="game-details-modal"
+              group="modal-actions"
+              onConfirm={() => setIsEditing(!isEditing)}
+              onBack={onClose}
             >
-              <Edit3 className="w-4 h-4 text-teal-400" />
-              <span>{isEditing ? 'Cancel Edit' : 'Edit'}</span>
-            </button>
+              {({ ref, isFocused }) => (
+                <button
+                  ref={ref}
+                  type="button"
+                  onClick={() => setIsEditing(!isEditing)}
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-semibold transition-colors cursor-pointer ${
+                    isEditing
+                      ? 'bg-teal-500/20 border-teal-500/40 text-teal-300'
+                      : 'bg-surface-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300'
+                  } ${isFocused ? 'controller-focus' : ''}`}
+                >
+                  <Edit3 className="w-4 h-4 text-teal-400" />
+                  <span>{isEditing ? 'Cancel Edit' : 'Edit'}</span>
+                </button>
+              )}
+            </FocusableItem>
 
             {/* Remove from Library */}
-            <button
-              type="button"
-              onClick={() => onRemove?.(game)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs font-semibold text-rose-300 transition-colors cursor-pointer"
+            <FocusableItem
+              id="modal-remove-btn"
+              scope="game-details-modal"
+              group="modal-actions"
+              onConfirm={() => onRemove?.(game)}
+              onBack={onClose}
             >
-              <Trash2 className="w-4 h-4" />
-              <span>Remove</span>
-            </button>
+              {({ ref, isFocused }) => (
+                <button
+                  ref={ref}
+                  type="button"
+                  onClick={() => onRemove?.(game)}
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs font-semibold text-rose-300 transition-colors cursor-pointer ${
+                    isFocused ? 'controller-focus' : ''
+                  }`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Remove</span>
+                </button>
+              )}
+            </FocusableItem>
           </div>
         </div>
 
@@ -473,54 +577,84 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
           /* Normal View Details Section */
           <div className="px-6 pb-6 space-y-6">
             {/* Description / About */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Description</h4>
-              <p className="text-sm text-zinc-300 leading-relaxed">
-                {game.description || 'No description available for this title.'}
-              </p>
-            </div>
+            <FocusableItem
+              id="modal-description-section"
+              scope="game-details-modal"
+              group="modal-body"
+              onBack={onClose}
+            >
+              {({ ref, isFocused }) => (
+                <div
+                  ref={ref}
+                  tabIndex={0}
+                  className={`space-y-2 p-3.5 rounded-2xl transition-all focus:outline-none ${
+                    isFocused ? 'ring-2 ring-teal-400/80 bg-teal-500/5' : ''
+                  }`}
+                >
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Description</h4>
+                  <p className="text-sm text-zinc-300 leading-relaxed">
+                    {game.description || 'No description available for this title.'}
+                  </p>
+                </div>
+              )}
+            </FocusableItem>
 
             {/* Metadata Specification Grid: Developer, Publisher, Genre, Release Date, Installed Size, Playtime, Last Played */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 text-xs">
-              <div>
-                <span className="text-zinc-500 block mb-0.5">Developer</span>
-                <span className="text-zinc-200 font-medium">{game.developer || 'Unknown'}</span>
-              </div>
-              <div>
-                <span className="text-zinc-500 block mb-0.5">Publisher</span>
-                <span className="text-zinc-200 font-medium">{game.publisher || 'Unknown'}</span>
-              </div>
-              <div>
-                <span className="text-zinc-500 block mb-0.5">Genre</span>
-                <span className="text-zinc-200 font-medium">{game.genre || 'Action / Adventure'}</span>
-              </div>
-              <div>
-                <span className="text-zinc-500 block mb-0.5">Release Date</span>
-                <span className="text-zinc-200 font-medium">{game.releaseDate || 'Unknown'}</span>
-              </div>
-              <div>
-                <span className="text-zinc-500 block mb-0.5">Playtime</span>
-                <span className="text-teal-400 font-mono font-medium">
-                  {formatPlayTime(game.totalPlayTime)}
-                </span>
-              </div>
-              <div>
-                <span className="text-zinc-500 block mb-0.5">Last Played</span>
-                <span className="text-zinc-300 font-mono font-medium">
-                  {formatLastPlayed(game.lastPlayedAt)}
-                </span>
-              </div>
-              <div>
-                <span className="text-zinc-500 block mb-0.5">Installed Size</span>
-                <span className="text-zinc-200 font-mono font-medium">
-                  {formatSize(game.installedSize)}
-                </span>
-              </div>
-              <div>
-                <span className="text-zinc-500 block mb-0.5">Drive</span>
-                <span className="text-zinc-200 font-mono font-medium">{game.drive || 'C:'}</span>
-              </div>
-            </div>
+            <FocusableItem
+              id="modal-metadata-grid"
+              scope="game-details-modal"
+              group="modal-body"
+              onBack={onClose}
+            >
+              {({ ref, isFocused }) => (
+                <div
+                  ref={ref}
+                  tabIndex={0}
+                  className={`grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-zinc-900/60 border text-xs transition-all focus:outline-none ${
+                    isFocused ? 'border-teal-400/80 ring-2 ring-teal-400/80' : 'border-zinc-800'
+                  }`}
+                >
+                  <div>
+                    <span className="text-zinc-500 block mb-0.5">Developer</span>
+                    <span className="text-zinc-200 font-medium">{game.developer || 'Unknown'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block mb-0.5">Publisher</span>
+                    <span className="text-zinc-200 font-medium">{game.publisher || 'Unknown'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block mb-0.5">Genre</span>
+                    <span className="text-zinc-200 font-medium">{game.genre || 'Action / Adventure'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block mb-0.5">Release Date</span>
+                    <span className="text-zinc-200 font-medium">{game.releaseDate || 'Unknown'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block mb-0.5">Playtime</span>
+                    <span className="text-teal-400 font-mono font-medium">
+                      {formatPlayTime(game.totalPlayTime)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block mb-0.5">Last Played</span>
+                    <span className="text-zinc-300 font-mono font-medium">
+                      {formatLastPlayed(game.lastPlayedAt)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block mb-0.5">Installed Size</span>
+                    <span className="text-zinc-200 font-mono font-medium">
+                      {formatSize(game.installedSize)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block mb-0.5">Drive</span>
+                    <span className="text-zinc-200 font-mono font-medium">{game.drive || 'C:'}</span>
+                  </div>
+                </div>
+              )}
+            </FocusableItem>
 
             {/* Installation Path & Executable Path Details */}
             <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-3 text-xs">
@@ -528,24 +662,37 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                 <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
                   Installation Path
                 </span>
-                <button
-                  type="button"
-                  onClick={handleCopyPath}
-                  className="hover:text-zinc-200 transition-colors inline-flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer"
-                  title="Copy path to clipboard"
+                <FocusableItem
+                  id="modal-copy-path-btn"
+                  scope="game-details-modal"
+                  group="modal-body"
+                  onConfirm={handleCopyPath}
+                  onBack={onClose}
                 >
-                  {copied ? (
-                    <>
-                      <Check className="w-3 h-3 text-teal-400" />
-                      <span className="text-teal-400 font-medium">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3" />
-                      <span>Copy</span>
-                    </>
+                  {({ ref, isFocused }) => (
+                    <button
+                      ref={ref}
+                      type="button"
+                      onClick={handleCopyPath}
+                      className={`hover:text-zinc-200 transition-colors inline-flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer p-1 rounded-lg ${
+                        isFocused ? 'controller-focus' : ''
+                      }`}
+                      title="Copy path to clipboard"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="w-3 h-3 text-teal-400" />
+                          <span className="text-teal-400 font-medium">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
                   )}
-                </button>
+                </FocusableItem>
               </div>
               <div className="font-mono text-[11px] text-zinc-300 bg-surface-900 px-3 py-2 rounded-xl border border-zinc-800/80 break-all select-all">
                 {game.installPath || 'Path not recorded'}

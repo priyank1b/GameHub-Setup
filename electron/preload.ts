@@ -3,7 +3,7 @@ import { Game } from '../src/types/Game';
 
 // Expose safe, strongly-typed API bridge to the renderer process
 contextBridge.exposeInMainWorld('gameHub', {
-  appVersion: '0.1.0',
+  appVersion: '1.0.1',
   platform: process.platform,
   ping: () => 'pong',
 
@@ -113,6 +113,13 @@ contextBridge.exposeInMainWorld('gameHub', {
       ipcRenderer.on('window:maximizeChange', listener);
       return () => {
         ipcRenderer.removeListener('window:maximizeChange', listener);
+      };
+    },
+    onRestored: (callback: () => void): (() => void) => {
+      const listener = () => callback();
+      ipcRenderer.on('window:restored', listener);
+      return () => {
+        ipcRenderer.removeListener('window:restored', listener);
       };
     },
   },

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { HardDrive, CheckSquare, Square, RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
 import { WindowsDrive } from '../types/Drive';
 import { Game } from '../types/Game';
+import { FocusableItem } from '../components/FocusableItem';
 
 interface DrivesProps {
   games?: Game[];
@@ -99,15 +100,27 @@ export const Drives: React.FC<DrivesProps> = ({ games = [] }) => {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 border border-zinc-700 transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50"
+        <FocusableItem
+          id="drives-refresh-btn"
+          scope="main"
+          group="drives"
+          onConfirm={handleRefresh}
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-teal-400 ${isRefreshing ? 'animate-spin' : ''}`} />
-          <span>{isRefreshing ? 'Scanning Drives...' : 'Refresh Drives'}</span>
-        </button>
+          {({ ref, isFocused }) => (
+            <button
+              ref={ref}
+              type="button"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 border transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50 ${
+                isFocused ? 'controller-focus border-teal-500' : 'border-zinc-700'
+              }`}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-teal-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Scanning Drives...' : 'Refresh Drives'}</span>
+            </button>
+          )}
+        </FocusableItem>
       </div>
 
       {/* Drives Grid */}
@@ -116,60 +129,76 @@ export const Drives: React.FC<DrivesProps> = ({ games = [] }) => {
           const gameCount = getGameCountForDrive(drive.letter);
 
           return (
-            <div
+            <FocusableItem
               key={drive.letter}
-              className={`p-5 rounded-2xl border transition-all ${
-                drive.isIncluded
-                  ? 'bg-surface-850 border-teal-500/40 shadow-lg shadow-teal-500/5'
-                  : 'bg-surface-850/50 border-zinc-800/80 opacity-70'
-              }`}
+              id={`drive-card-${drive.letter}`}
+              scope="main"
+              group="drives"
+              onConfirm={() => toggleDrive(drive.letter)}
             >
-              {/* Drive Letter & Toggle */}
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl font-black font-mono text-teal-400 bg-teal-500/10 px-3 py-1 rounded-xl border border-teal-500/20">
-                    {drive.letter}
-                  </span>
-                  <div>
-                    <h3 className="font-bold text-sm text-zinc-100 line-clamp-1">{drive.name}</h3>
-                    <div className="flex items-center gap-2 text-[11px] text-zinc-500 font-mono">
-                      <span>{drive.driveType}</span>
-                      <span>&bull;</span>
-                      <span className="text-teal-400 font-semibold">{gameCount} games indexed</span>
+              {({ ref, isFocused }) => (
+                <div
+                  ref={ref}
+                  onClick={() => toggleDrive(drive.letter)}
+                  className={`p-5 rounded-2xl border transition-all cursor-pointer ${
+                    isFocused ? 'controller-focus' : ''
+                  } ${
+                    drive.isIncluded
+                      ? 'bg-surface-850 border-teal-500/40 shadow-lg shadow-teal-500/5'
+                      : 'bg-surface-850/50 border-zinc-800/80 opacity-70'
+                  }`}
+                >
+                  {/* Drive Letter & Toggle */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl font-black font-mono text-teal-400 bg-teal-500/10 px-3 py-1 rounded-xl border border-teal-500/20">
+                        {drive.letter}
+                      </span>
+                      <div>
+                        <h3 className="font-bold text-sm text-zinc-100 line-clamp-1">{drive.name}</h3>
+                        <div className="flex items-center gap-2 text-[11px] text-zinc-500 font-mono">
+                          <span>{drive.driveType}</span>
+                          <span>&bull;</span>
+                          <span className="text-teal-400 font-semibold">{gameCount} games indexed</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleDrive(drive.letter);
+                      }}
+                      className="text-zinc-400 hover:text-white p-1 rounded transition-colors cursor-pointer"
+                      title={drive.isIncluded ? 'Exclude from scan' : 'Include in scan'}
+                    >
+                      {drive.isIncluded ? (
+                        <CheckSquare className="w-5 h-5 text-teal-400" />
+                      ) : (
+                        <Square className="w-5 h-5 text-zinc-600" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Progress Bar Meter */}
+                  <div className="space-y-1.5 pt-2">
+                    <div className="w-full h-2 rounded-full bg-zinc-900 overflow-hidden border border-zinc-800">
+                      <div
+                        className={`h-full transition-all duration-500 ${
+                          drive.usedPercent > 90 ? 'bg-rose-500' : 'bg-teal-500'
+                        }`}
+                        style={{ width: `${drive.usedPercent}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400">
+                      <span>{formatGB(drive.availableBytes)} free</span>
+                      <span>{formatGB(drive.totalBytes)} total</span>
                     </div>
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => toggleDrive(drive.letter)}
-                  className="text-zinc-400 hover:text-white p-1 rounded transition-colors cursor-pointer"
-                  title={drive.isIncluded ? 'Exclude from scan' : 'Include in scan'}
-                >
-                  {drive.isIncluded ? (
-                    <CheckSquare className="w-5 h-5 text-teal-400" />
-                  ) : (
-                    <Square className="w-5 h-5 text-zinc-600" />
-                  )}
-                </button>
-              </div>
-
-              {/* Progress Bar Meter */}
-              <div className="space-y-1.5 pt-2">
-                <div className="w-full h-2 rounded-full bg-zinc-900 overflow-hidden border border-zinc-800">
-                  <div
-                    className={`h-full transition-all duration-500 ${
-                      drive.usedPercent > 90 ? 'bg-rose-500' : 'bg-teal-500'
-                    }`}
-                    style={{ width: `${drive.usedPercent}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400">
-                  <span>{formatGB(drive.availableBytes)} free</span>
-                  <span>{formatGB(drive.totalBytes)} total</span>
-                </div>
-              </div>
-            </div>
+              )}
+            </FocusableItem>
           );
         })}
       </div>

@@ -4,6 +4,7 @@ import { LibraryFilter, SortOption } from '../types/Navigation';
 import { GameGrid } from '../components/GameGrid';
 import { EmptyState } from '../components/EmptyState';
 import { Filter, ArrowUpDown, AlertTriangle } from 'lucide-react';
+import { FocusableItem } from '../components/FocusableItem';
 
 interface LibraryProps {
   games: Game[];
@@ -123,36 +124,48 @@ export const Library: React.FC<LibraryProps> = ({
             const isActive = currentFilter === tab.id;
             const isMissingTab = tab.id === 'MISSING';
             return (
-              <button
+              <FocusableItem
                 key={tab.id}
-                type="button"
-                onClick={() => onFilterChange(tab.id)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                  isActive
-                    ? isMissingTab
-                      ? 'bg-amber-500 text-zinc-950 font-bold shadow-md shadow-amber-500/20'
-                      : 'bg-teal-500 text-zinc-950 font-bold shadow-md shadow-teal-500/20'
-                    : isMissingTab
-                    ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                    : 'bg-zinc-900/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
-                }`}
+                id={`filter-${tab.id}`}
+                scope="main"
+                group="filters"
+                onConfirm={() => onFilterChange(tab.id)}
               >
-                {isMissingTab && <AlertTriangle className="w-3.5 h-3.5" />}
-                <span>{tab.label}</span>
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                    isActive
-                      ? isMissingTab
-                        ? 'bg-zinc-950 text-amber-400'
-                        : 'bg-zinc-950 text-teal-400'
-                      : isMissingTab
-                      ? 'bg-amber-500/20 text-amber-300'
-                      : 'bg-zinc-800 text-zinc-400'
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              </button>
+                {({ ref, isFocused }) => (
+                  <button
+                    ref={ref}
+                    type="button"
+                    onClick={() => onFilterChange(tab.id)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                      isFocused ? 'controller-focus' : ''
+                    } ${
+                      isActive
+                        ? isMissingTab
+                          ? 'bg-amber-500 text-zinc-950 font-bold shadow-md shadow-amber-500/20'
+                          : 'bg-teal-500 text-zinc-950 font-bold shadow-md shadow-teal-500/20'
+                        : isMissingTab
+                        ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : 'bg-zinc-900/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    {isMissingTab && <AlertTriangle className="w-3.5 h-3.5" />}
+                    <span>{tab.label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                        isActive
+                          ? isMissingTab
+                            ? 'bg-zinc-950 text-amber-400'
+                            : 'bg-zinc-950 text-teal-400'
+                          : isMissingTab
+                          ? 'bg-amber-500/20 text-amber-300'
+                          : 'bg-zinc-800 text-zinc-400'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                )}
+              </FocusableItem>
             );
           })}
         </div>
@@ -161,18 +174,29 @@ export const Library: React.FC<LibraryProps> = ({
         <div className="flex items-center gap-2 text-xs text-zinc-400 self-end sm:self-center">
           <ArrowUpDown className="w-3.5 h-3.5 text-zinc-500" />
           <span className="text-zinc-500">Sort by:</span>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="bg-zinc-900 border border-zinc-800 text-zinc-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-teal-500/50 text-xs"
+          <FocusableItem
+            id="library-sort-select"
+            scope="main"
+            group="filters"
           >
-            <option value="name-asc">Title (A - Z)</option>
-            <option value="name-desc">Title (Z - A)</option>
-            <option value="recently-added">Recently Added</option>
-            <option value="recent">Recently Played</option>
-            <option value="playtime">Most Played</option>
-            <option value="size">Installed Size</option>
-          </select>
+            {({ ref, isFocused }) => (
+              <select
+                ref={ref}
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className={`bg-zinc-900 border border-zinc-800 text-zinc-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-teal-500/50 text-xs ${
+                  isFocused ? 'controller-focus' : ''
+                }`}
+              >
+                <option value="name-asc">Title (A - Z)</option>
+                <option value="name-desc">Title (Z - A)</option>
+                <option value="recently-added">Recently Added</option>
+                <option value="recent">Recently Played</option>
+                <option value="playtime">Most Played</option>
+                <option value="size">Installed Size</option>
+              </select>
+            )}
+          </FocusableItem>
         </div>
       </div>
 

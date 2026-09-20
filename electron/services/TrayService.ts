@@ -11,11 +11,51 @@ export class TrayService {
   private mainWindow: BrowserWindow;
   private isDestroyed: boolean = false;
   private onQuitCallback?: () => void;
+  private wasMaximizedOnHide: boolean = false;
 
   constructor(mainWindow: BrowserWindow, onQuit?: () => void) {
     this.mainWindow = mainWindow;
     this.onQuitCallback = onQuit;
     this.init();
+  }
+
+  public setWasMaximized(maximized: boolean): void {
+    this.wasMaximizedOnHide = maximized;
+  }
+
+  public restoreWindow(): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+
+    if (this.mainWindow.isMinimized()) {
+      this.mainWindow.restore();
+    }
+    if (!this.mainWindow.isVisible()) {
+      this.mainWindow.show();
+    }
+    if (this.wasMaximizedOnHide || this.mainWindow.isMaximized()) {
+      this.mainWindow.maximize();
+    }
+    this.mainWindow.focus();
+    this.mainWindow.webContents.focus();
+
+    // Invalidate surface to force Chromium compositor repaint on Windows frameless window
+    if (process.platform === 'win32') {
+      this.mainWindow.webContents.invalidate();
+    }
+
+    // Broadcast restore to renderer
+    this.mainWindow.webContents.send('window:restored');
+  }
+
+  public toggleWindow(): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+
+    if (this.mainWindow.isVisible() && !this.mainWindow.isMinimized() && this.mainWindow.isFocused()) {
+      this.wasMaximizedOnHide = this.mainWindow.isMaximized();
+      this.mainWindow.hide();
+    } else {
+      this.restoreWindow();
+    }
   }
 
   private resolveIconPath(): string {
@@ -106,28 +146,6 @@ export class TrayService {
       console.log('[TrayService] Windows system tray successfully initialized.');
     } catch (err: any) {
       console.error('[TrayService] Failed to initialize system tray:', err.message);
-    }
-  }
-
-  public restoreWindow(): void {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
-
-    if (this.mainWindow.isMinimized()) {
-      this.mainWindow.restore();
-    }
-    if (!this.mainWindow.isVisible()) {
-      this.mainWindow.show();
-    }
-    this.mainWindow.focus();
-  }
-
-  public toggleWindow(): void {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
-
-    if (this.mainWindow.isVisible() && !this.mainWindow.isMinimized() && this.mainWindow.isFocused()) {
-      this.mainWindow.hide();
-    } else {
-      this.restoreWindow();
     }
   }
 

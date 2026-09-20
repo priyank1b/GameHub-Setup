@@ -15,16 +15,22 @@ import {
   HardDrive,
   RefreshCw,
   FolderOpen,
+  Gamepad2,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { APP_CONFIG } from '../config/appConfig';
 import { WindowsDrive } from '../types/Drive';
+import { useNavigation } from '../context/NavigationContext';
+import { FocusableItem } from '../components/FocusableItem';
 
 interface SettingsProps {
   onLibraryUpdated?: () => void;
 }
 
 export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'library' | 'appearance' | 'advanced'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'library' | 'appearance' | 'advanced' | 'controller'>('general');
+  const { controllerInfo, isControllerEnabled, setControllerEnabled } = useNavigation();
 
   // General settings state
   const [startWithWindows, setStartWithWindows] = useState(false);
@@ -183,19 +189,32 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
           { id: 'library', label: 'Library & Folders' },
           { id: 'appearance', label: 'Appearance' },
           { id: 'advanced', label: 'Advanced & Database' },
+          { id: 'controller', label: 'Controller' },
         ].map((tab) => (
-          <button
+          <FocusableItem
             key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-              activeTab === tab.id
-                ? 'bg-teal-500 text-zinc-950 font-bold shadow-md shadow-teal-500/20'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
-            }`}
+            id={`settings-tab-${tab.id}`}
+            scope="main"
+            group="tabs"
+            onConfirm={() => setActiveTab(tab.id as any)}
           >
-            {tab.label}
-          </button>
+            {({ ref, isFocused }) => (
+              <button
+                ref={ref}
+                type="button"
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                  isFocused ? 'controller-focus' : ''
+                } ${
+                  activeTab === tab.id
+                    ? 'bg-teal-500 text-zinc-950 font-bold shadow-md shadow-teal-500/20'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                }`}
+              >
+                {tab.label}
+              </button>
+            )}
+          </FocusableItem>
         ))}
       </div>
 
@@ -224,8 +243,8 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
 
               <label className="flex items-center justify-between pt-3 cursor-pointer">
                 <div>
-                  <p className="text-sm font-semibold text-zinc-200">Minimize to System Tray</p>
-                  <p className="text-xs text-zinc-500">Keep GameHub accessible in background tray.</p>
+                  <p className="text-sm font-semibold text-zinc-200">Close to System Tray</p>
+                  <p className="text-xs text-zinc-500">Closing the window keeps GameHub running in the background tray.</p>
                 </div>
                 <input
                   type="checkbox"
@@ -611,6 +630,155 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
 
           <div className="pt-4 border-t border-zinc-800 text-xs text-zinc-500 flex items-center justify-between">
             <span>{APP_CONFIG.name} v{APP_CONFIG.version}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Controller */}
+      {activeTab === 'controller' && (
+        <div className="space-y-5">
+          {/* Main Controller Support Card */}
+          <div className="p-6 rounded-2xl bg-surface-850 border border-zinc-800 space-y-6">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <h3 className="font-bold text-base text-zinc-100 flex items-center gap-2">
+                  <Gamepad2 className="w-5 h-5 text-teal-400" />
+                  Controller & Gamepad Navigation
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Operate GameHub using your Xbox, PlayStation, or generic PC gamepad.
+                </p>
+              </div>
+
+              {/* Status Badge */}
+              <div
+                className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-semibold ${
+                  controllerInfo && controllerInfo.connected
+                    ? 'bg-teal-500/10 border-teal-500/30 text-teal-300'
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    controllerInfo && controllerInfo.connected
+                      ? 'bg-teal-400 animate-pulse'
+                      : 'bg-zinc-500'
+                  }`}
+                />
+                <span>
+                  {controllerInfo && controllerInfo.connected
+                    ? 'Controller Connected'
+                    : 'No Controller Detected'}
+                </span>
+              </div>
+            </div>
+
+            {/* Hardware & Mapping Info */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 space-y-1">
+                <span className="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold">
+                  Detected Device
+                </span>
+                <p className="text-sm font-bold text-zinc-200">
+                  {controllerInfo?.name || (controllerInfo?.connected ? 'Standard Gamepad' : 'None detected')}
+                </p>
+                <p className="text-[11px] text-zinc-500 font-mono">
+                  {controllerInfo?.id ? controllerInfo.id.slice(0, 48) : 'Connect via USB or Bluetooth'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 space-y-1">
+                <span className="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold">
+                  Mapping & Port
+                </span>
+                <p className="text-sm font-bold text-teal-400">
+                  {controllerInfo?.mapping
+                    ? `W3C ${controllerInfo.mapping.toUpperCase()} Standard`
+                    : controllerInfo?.connected
+                    ? 'Standard Gamepad'
+                    : 'Offline'}
+                </p>
+                <p className="text-[11px] text-zinc-500 font-mono">
+                  {controllerInfo !== null ? `Active Device Slot #${controllerInfo.index}` : 'Hot-plug supported'}
+                </p>
+              </div>
+            </div>
+
+            {/* Controller Navigation Toggle */}
+            <div className="pt-4 border-t border-zinc-800/80">
+              <FocusableItem
+                id="controller-enable-toggle"
+                scope="main"
+                group="controller-settings"
+                onConfirm={() => setControllerEnabled(!isControllerEnabled)}
+              >
+                {({ ref, isFocused }) => (
+                  <label
+                    ref={ref}
+                    className={`flex items-center justify-between p-4 rounded-xl bg-zinc-900 border transition-all cursor-pointer ${
+                      isFocused
+                        ? 'controller-focus border-teal-500'
+                        : 'border-zinc-800/80 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-200">
+                        Enable GameHub Controller Navigation
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        When enabled, GameHub listens for D-Pad, Thumbsticks, and standard buttons to navigate the UI.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={isControllerEnabled}
+                      onChange={(e) => setControllerEnabled(e.target.checked)}
+                      className="w-4 h-4 accent-teal-500 rounded cursor-pointer"
+                    />
+                  </label>
+                )}
+              </FocusableItem>
+            </div>
+          </div>
+
+          {/* Quick Controller Button Guide */}
+          <div className="p-6 rounded-2xl bg-surface-850 border border-zinc-800 space-y-4">
+            <h4 className="font-bold text-sm text-zinc-100 flex items-center gap-2">
+              <Gamepad2 className="w-4 h-4 text-teal-400" />
+              Standard Controller Controls
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center justify-between">
+                <span className="text-zinc-400">D-Pad / Left Thumbstick</span>
+                <span className="font-bold text-teal-300 font-mono">Navigate UI & Game Grid</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center justify-between">
+                <span className="text-zinc-400">A / Cross button</span>
+                <span className="font-bold text-teal-300 font-mono">Select / Open / Confirm</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center justify-between">
+                <span className="text-zinc-400">B / Circle button</span>
+                <span className="font-bold text-teal-300 font-mono">Back / Close Modal</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center justify-between">
+                <span className="text-zinc-400">X / Square button</span>
+                <span className="font-bold text-teal-300 font-mono">Toggle Favorite</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center justify-between">
+                <span className="text-zinc-400">Y / Triangle button</span>
+                <span className="font-bold text-teal-300 font-mono">Search / Context Menu</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center justify-between">
+                <span className="text-zinc-400">LB / RB (Bumpers)</span>
+                <span className="font-bold text-teal-300 font-mono">Switch Sections / Tabs</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
