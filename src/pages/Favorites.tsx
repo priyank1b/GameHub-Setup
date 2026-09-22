@@ -13,6 +13,7 @@ interface FavoritesProps {
   onSelectGame?: (game: Game) => void;
   onLocate?: (game: Game) => void;
   onRemove?: (game: Game) => void;
+  onHide?: (game: Game) => void;
 }
 
 export const Favorites: React.FC<FavoritesProps> = ({
@@ -23,6 +24,7 @@ export const Favorites: React.FC<FavoritesProps> = ({
   onSelectGame,
   onLocate,
   onRemove,
+  onHide,
 }) => {
   const favoriteGames = games.filter((g) => g.isFavorite);
 
@@ -55,6 +57,7 @@ export const Favorites: React.FC<FavoritesProps> = ({
           onSelectGame={onSelectGame}
           onLocate={onLocate}
           onRemove={onRemove}
+          onHide={onHide}
         />
       ) : (
         <EmptyState

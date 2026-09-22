@@ -1,5 +1,5 @@
 import { Database } from 'better-sqlite3';
-import { Game } from '../../../src/types/Game';
+import { Game, StorageSizeStatus, StorageSizeSource } from '../../../src/types/Game';
 import { GameLauncher } from '../../../src/types/Launcher';
 
 export class GameRepository {
@@ -15,13 +15,17 @@ export class GameRepository {
         launcher, launcher_app_id, cover_image, background_image,
         icon_path, description, developer, publisher, genre,
         release_date, installed_size, is_favorite, is_installed,
-        is_manual, last_played_at, total_play_time, created_at, updated_at
+        is_manual, is_hidden, last_played_at, total_play_time,
+        install_size_status, install_size_source, install_size_updated_at,
+        created_at, updated_at
       ) VALUES (
         @name, @normalized_name, @executable_path, @install_path,
         @launcher, @launcher_app_id, @cover_image, @background_image,
         @icon_path, @description, @developer, @publisher, @genre,
         @release_date, @installed_size, @is_favorite, @is_installed,
-        @is_manual, @last_played_at, @total_play_time, @created_at, @updated_at
+        @is_manual, @is_hidden, @last_played_at, @total_play_time,
+        @install_size_status, @install_size_source, @install_size_updated_at,
+        @created_at, @updated_at
       )
     `);
 
@@ -40,12 +44,16 @@ export class GameRepository {
       publisher: game.publisher || null,
       genre: game.genre || null,
       release_date: game.releaseDate || null,
-      installed_size: game.installedSize || 0,
+      installed_size: game.installSizeBytes ?? game.installedSize ?? 0,
       is_favorite: game.isFavorite ? 1 : 0,
       is_installed: game.isInstalled !== false ? 1 : 0,
       is_manual: game.isManual ? 1 : 0,
+      is_hidden: game.isHidden ? 1 : 0,
       last_played_at: game.lastPlayedAt || null,
       total_play_time: game.totalPlayTime || 0,
+      install_size_status: game.installSizeStatus || (game.installedSize ? 'KNOWN' : 'UNKNOWN'),
+      install_size_source: game.installSizeSource || (game.installedSize ? 'metadata' : 'unknown'),
+      install_size_updated_at: game.installSizeUpdatedAt || (game.installedSize ? now : null),
       created_at: now,
       updated_at: now,
     });
@@ -67,15 +75,30 @@ export class GameRepository {
     return row ? this.mapRowToGame(row) : null;
   }
 
-  public getAll(): Game[] {
-    const stmt = this.db.prepare('SELECT * FROM games ORDER BY name COLLATE NOCASE ASC');
+  public getAll(includeHidden = false): Game[] {
+    const sql = includeHidden
+      ? 'SELECT * FROM games ORDER BY name COLLATE NOCASE ASC'
+      : 'SELECT * FROM games WHERE is_hidden = 0 ORDER BY name COLLATE NOCASE ASC';
+    const stmt = this.db.prepare(sql);
     const rows = stmt.all() as any[];
     return rows.map(this.mapRowToGame);
   }
 
+  public getHidden(): Game[] {
+    const stmt = this.db.prepare(
+      'SELECT * FROM games WHERE is_hidden = 1 ORDER BY name COLLATE NOCASE ASC'
+    );
+    const rows = stmt.all() as any[];
+    return rows.map(this.mapRowToGame);
+  }
+
+  public setHidden(id: number, isHidden: boolean): Game | null {
+    return this.update(id, { isHidden });
+  }
+
   public getFavorites(): Game[] {
     const stmt = this.db.prepare(
-      'SELECT * FROM games WHERE is_favorite = 1 ORDER BY name COLLATE NOCASE ASC'
+      'SELECT * FROM games WHERE is_favorite = 1 AND is_hidden = 0 ORDER BY name COLLATE NOCASE ASC'
     );
     const rows = stmt.all() as any[];
     return rows.map(this.mapRowToGame);
@@ -83,7 +106,7 @@ export class GameRepository {
 
   public getByLauncher(launcher: GameLauncher): Game[] {
     const stmt = this.db.prepare(
-      'SELECT * FROM games WHERE launcher = ? ORDER BY name COLLATE NOCASE ASC'
+      'SELECT * FROM games WHERE launcher = ? AND is_hidden = 0 ORDER BY name COLLATE NOCASE ASC'
     );
     const rows = stmt.all(launcher) as any[];
     return rows.map(this.mapRowToGame);
@@ -144,6 +167,10 @@ export class GameRepository {
       fields.push('is_installed = @is_installed');
       values.is_installed = updates.isInstalled ? 1 : 0;
     }
+    if (updates.isHidden !== undefined) {
+      fields.push('is_hidden = @is_hidden');
+      values.is_hidden = updates.isHidden ? 1 : 0;
+    }
     if (updates.lastPlayedAt !== undefined) {
       fields.push('last_played_at = @last_played_at');
       values.last_played_at = updates.lastPlayedAt;
@@ -160,9 +187,21 @@ export class GameRepository {
       fields.push('launcher_app_id = @launcher_app_id');
       values.launcher_app_id = updates.launcherAppId;
     }
-    if (updates.installedSize !== undefined) {
+    if (updates.installedSize !== undefined || updates.installSizeBytes !== undefined) {
       fields.push('installed_size = @installed_size');
-      values.installed_size = updates.installedSize;
+      values.installed_size = updates.installSizeBytes ?? updates.installedSize;
+    }
+    if (updates.installSizeStatus !== undefined) {
+      fields.push('install_size_status = @install_size_status');
+      values.install_size_status = updates.installSizeStatus;
+    }
+    if (updates.installSizeSource !== undefined) {
+      fields.push('install_size_source = @install_size_source');
+      values.install_size_source = updates.installSizeSource;
+    }
+    if (updates.installSizeUpdatedAt !== undefined) {
+      fields.push('install_size_updated_at = @install_size_updated_at');
+      values.install_size_updated_at = updates.installSizeUpdatedAt;
     }
     if (updates.description !== undefined) {
       fields.push('description = @description');
@@ -193,6 +232,32 @@ export class GameRepository {
     this.db.prepare(sql).run(values);
 
     return this.getById(id);
+  }
+
+  public updateStorageInfo(
+    id: number,
+    sizeBytes?: number,
+    status: StorageSizeStatus = 'KNOWN',
+    source: StorageSizeSource = 'unknown'
+  ): void {
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(`
+      UPDATE games
+      SET installed_size = COALESCE(@installed_size, installed_size),
+          install_size_status = @install_size_status,
+          install_size_source = @install_size_source,
+          install_size_updated_at = @install_size_updated_at,
+          updated_at = @updated_at
+      WHERE id = @id
+    `);
+    stmt.run({
+      id,
+      installed_size: sizeBytes !== undefined ? sizeBytes : null,
+      install_size_status: status,
+      install_size_source: source,
+      install_size_updated_at: now,
+      updated_at: now,
+    });
   }
 
   public delete(id: number): boolean {
@@ -250,9 +315,14 @@ export class GameRepository {
       genre: row.genre,
       releaseDate: row.release_date,
       installedSize: row.installed_size,
+      installSizeBytes: row.installed_size,
+      installSizeStatus: row.install_size_status || (row.installed_size ? 'KNOWN' : 'UNKNOWN'),
+      installSizeSource: row.install_size_source || (row.installed_size ? 'metadata' : 'unknown'),
+      installSizeUpdatedAt: row.install_size_updated_at,
       isFavorite: row.is_favorite === 1,
       isInstalled: row.is_installed === 1,
       isManual: row.is_manual === 1,
+      isHidden: row.is_hidden === 1,
       lastPlayedAt: row.last_played_at,
       totalPlayTime: row.total_play_time,
       drive: row.install_path ? row.install_path.slice(0, 2).toUpperCase() : undefined,

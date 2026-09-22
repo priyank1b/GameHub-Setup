@@ -70,6 +70,42 @@ export function registerGameHandlers(
     }
   });
 
+  // Hide game (exclude from library and future rescans)
+  ipcMain.handle('games:hide', async (_event, id: number) => {
+    try {
+      if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) {
+        return false;
+      }
+      return !!gameRepo.setHidden(id, true);
+    } catch (err: any) {
+      console.error(`[IPC games:hide] Error for id ${id}:`, err.message);
+      return false;
+    }
+  });
+
+  // Unhide game (restore to library)
+  ipcMain.handle('games:unhide', async (_event, id: number) => {
+    try {
+      if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) {
+        return false;
+      }
+      return !!gameRepo.setHidden(id, false);
+    } catch (err: any) {
+      console.error(`[IPC games:unhide] Error for id ${id}:`, err.message);
+      return false;
+    }
+  });
+
+  // Get all hidden/excluded games
+  ipcMain.handle('games:getHidden', async () => {
+    try {
+      return gameRepo.getHidden();
+    } catch (err: any) {
+      console.error('[IPC games:getHidden] Error:', err.message);
+      return [];
+    }
+  });
+
   // Toggle favorite
   ipcMain.handle('games:toggleFavorite', async (_event, id: number) => {
     try {
@@ -187,13 +223,73 @@ export function registerGameHandlers(
         }
 
         let exists = false;
-        if (game.launcher === 'XBOX' && game.launcherAppId && game.launcherAppId.includes('!')) {
-          exists = true;
-        } else {
-          if (game.executablePath && fs.existsSync(game.executablePath)) {
+        if (game.executablePath) {
+          if (fs.existsSync(game.executablePath)) {
             exists = true;
-          } else if (game.installPath && fs.existsSync(game.installPath)) {
-            exists = true;
+          } else if (game.launcher === 'STEAM' && game.launcherAppId) {
+            if (game.installPath) {
+              const steamappsDir = path.resolve(game.installPath, '..', '..');
+              const acfPath = path.join(steamappsDir, `appmanifest_${game.launcherAppId}.acf`);
+              if (fs.existsSync(acfPath)) {
+                exists = true;
+              }
+            }
+            // If missing at old path, check other connected Steam libraries for relocation
+            if (!exists) {
+              const standardSteamDirs = [
+                'C:\\Program Files (x86)\\Steam\\steamapps',
+                'C:\\Program Files\\Steam\\steamapps',
+                'C:\\Steam\\steamapps',
+                'C:\\SteamLibrary\\steamapps',
+                'D:\\SteamLibrary\\steamapps',
+                'E:\\SteamLibrary\\steamapps',
+                'F:\\SteamLibrary\\steamapps',
+                'G:\\SteamLibrary\\steamapps',
+              ];
+              for (const steamappsDir of standardSteamDirs) {
+                const driveLetter = steamappsDir.slice(0, 2).toUpperCase();
+                if (!availableDrives.has(driveLetter)) continue;
+                const acfPath = path.join(steamappsDir, `appmanifest_${game.launcherAppId}.acf`);
+                if (fs.existsSync(acfPath)) {
+                  exists = true;
+                  try {
+                    const content = fs.readFileSync(acfPath, 'utf8');
+                    const match = content.match(/"installdir"\s+"([^"]+)"/i);
+                    const installDirName = match ? match[1] : (game.installPath ? path.basename(game.installPath) : '');
+                    if (installDirName) {
+                      const newInstallPath = path.join(steamappsDir, 'common', installDirName);
+                      let newExePath = game.executablePath ? path.join(newInstallPath, path.basename(game.executablePath)) : undefined;
+                      if (!newExePath || !fs.existsSync(newExePath)) {
+                        // Check common known relative binary paths or top-level exe
+                        if (fs.existsSync(newInstallPath)) {
+                          const dirFiles = fs.readdirSync(newInstallPath);
+                          const exeCandidate = dirFiles.find((f) => f.toLowerCase().endsWith('.exe'));
+                          if (exeCandidate) {
+                            newExePath = path.join(newInstallPath, exeCandidate);
+                          }
+                        }
+                      }
+                      gameRepo.update(game.id, {
+                        installPath: newInstallPath,
+                        ...(newExePath ? { executablePath: newExePath } : {}),
+                        drive: driveLetter,
+                        isInstalled: true,
+                      });
+                    }
+                  } catch {}
+                  break;
+                }
+              }
+            }
+          }
+        } else if (game.installPath) {
+          if (fs.existsSync(game.installPath)) {
+            try {
+              const files = fs.readdirSync(game.installPath);
+              exists = files.length > 0;
+            } catch {
+              exists = true;
+            }
           }
         }
 

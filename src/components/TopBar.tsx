@@ -120,13 +120,13 @@ export const TopBar: React.FC<TopBarProps> = ({
           id="topbar-rescan"
           scope="topbar"
           group="actions"
-          onConfirm={onRescan}
+          onConfirm={isScanning ? undefined : onRescan}
         >
           {({ ref, isFocused }) => (
             <button
               ref={ref}
               type="button"
-              onClick={onRescan}
+              onClick={isScanning ? undefined : onRescan}
               disabled={isScanning}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-850 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50 ${
                 isFocused ? 'controller-focus' : ''

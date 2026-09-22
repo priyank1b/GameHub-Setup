@@ -15,6 +15,9 @@ export interface GameHubBridge {
     launch: (gameId: number) => Promise<{ success: boolean; launchId?: number; error?: string }>;
     openFolder: (gameId: number) => Promise<boolean>;
     locate: (id: number, targetPath: string) => Promise<{ success: boolean; game?: Game; error?: string }>;
+    hide: (id: number) => Promise<boolean>;
+    unhide: (id: number) => Promise<boolean>;
+    getHidden: () => Promise<Game[]>;
     checkMissing: () => Promise<{ success: boolean; missingCount?: number; restoredCount?: number; error?: string }>;
     scan: () => Promise<{ status: string; newGamesCount: number }>;
   };
@@ -76,6 +79,28 @@ export interface GameHubBridge {
       drive: string;
     }>>;
     importCandidate: (candidate: any) => Promise<{ success: boolean; game?: Game; reason?: string }>;
+    getAutoRescanStatus: () => Promise<{
+      enabled: boolean;
+      intervalMinutes: number;
+      lastScanTime?: string;
+      nextScanTime?: string;
+      isScanning: boolean;
+    }>;
+    setAutoRescan: (enabled: boolean, intervalMinutes?: number) => Promise<{
+      enabled: boolean;
+      intervalMinutes: number;
+      lastScanTime?: string;
+      nextScanTime?: string;
+      isScanning: boolean;
+    }>;
+    triggerAutoRescan: () => Promise<{ success: boolean; result?: any }>;
+    onAutoRescanStatus: (callback: (status: any) => void) => () => void;
+    onNewGamesDiscovered: (callback: (data: { count: number; missingCount?: number }) => void) => () => void;
+  };
+
+  storage?: {
+    resolveSize: (gameId: number, force?: boolean) => Promise<{ success: boolean; info?: import('./Game').StorageInfo; error?: string }>;
+    resolveAll: (refresh?: boolean) => Promise<{ success: boolean; message?: string; error?: string }>;
   };
 
   backup: {

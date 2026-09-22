@@ -3,7 +3,7 @@ import { Game } from '../src/types/Game';
 
 // Expose safe, strongly-typed API bridge to the renderer process
 contextBridge.exposeInMainWorld('gameHub', {
-  appVersion: '1.0.2',
+  appVersion: '1.0.3',
   platform: process.platform,
   ping: () => 'pong',
 
@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('gameHub', {
       ipcRenderer.invoke('games:openFolder', gameId),
     locate: (id: number, targetPath: string): Promise<{ success: boolean; game?: Game; error?: string }> =>
       ipcRenderer.invoke('games:locate', id, targetPath),
+    hide: (id: number): Promise<boolean> => ipcRenderer.invoke('games:hide', id),
+    unhide: (id: number): Promise<boolean> => ipcRenderer.invoke('games:unhide', id),
+    getHidden: (): Promise<Game[]> => ipcRenderer.invoke('games:getHidden'),
     checkMissing: (): Promise<{ success: boolean; missingCount?: number; restoredCount?: number; error?: string }> =>
       ipcRenderer.invoke('games:checkMissing'),
     scan: (): Promise<{ status: string; newGamesCount: number }> =>
@@ -77,6 +80,33 @@ contextBridge.exposeInMainWorld('gameHub', {
       ipcRenderer.invoke('scanner:scanStandalone', customLocations),
     importCandidate: (candidate: any): Promise<{ success: boolean; game?: any; reason?: string }> =>
       ipcRenderer.invoke('scanner:importCandidate', candidate),
+    getAutoRescanStatus: (): Promise<any> =>
+      ipcRenderer.invoke('scanner:getAutoRescanStatus'),
+    setAutoRescan: (enabled: boolean, intervalMinutes?: number): Promise<any> =>
+      ipcRenderer.invoke('scanner:setAutoRescan', enabled, intervalMinutes),
+    triggerAutoRescan: (): Promise<any> =>
+      ipcRenderer.invoke('scanner:triggerAutoRescan'),
+    onAutoRescanStatus: (callback: (status: any) => void): (() => void) => {
+      const listener = (_event: any, status: any) => callback(status);
+      ipcRenderer.on('scanner:autoRescanStatus', listener);
+      return () => {
+        ipcRenderer.removeListener('scanner:autoRescanStatus', listener);
+      };
+    },
+    onNewGamesDiscovered: (callback: (data: { count: number }) => void): (() => void) => {
+      const listener = (_event: any, data: any) => callback(data);
+      ipcRenderer.on('scanner:newGamesDiscovered', listener);
+      return () => {
+        ipcRenderer.removeListener('scanner:newGamesDiscovered', listener);
+      };
+    },
+  },
+
+  storage: {
+    resolveSize: (gameId: number, force?: boolean): Promise<{ success: boolean; info?: any; error?: string }> =>
+      ipcRenderer.invoke('storage:resolveSize', gameId, force),
+    resolveAll: (refresh?: boolean): Promise<{ success: boolean; message?: string; error?: string }> =>
+      ipcRenderer.invoke('storage:resolveAll', refresh),
   },
 
   backup: {

@@ -117,4 +117,63 @@ export function runMigrations(db: Database, dbPath?: string): void {
     db.pragma('user_version = 2');
     console.log('[Migrations] Migration 2 applied successfully. Schema version is now 2.');
   }
+
+  // Migration 3: Storage detection metadata columns (v1.0.3)
+  if (currentVersion < 3) {
+    console.log('[Migrations] Applying Migration 3: Storage detection metadata columns...');
+    if (dbPath && dbPath !== ':memory:' && fs.existsSync(dbPath)) {
+      try {
+        fs.copyFileSync(dbPath, `${dbPath}.backup_v2`);
+      } catch (e) {}
+    }
+
+    const columns = db.pragma('table_info(games)') as { name: string }[];
+    const colNames = new Set(columns.map((c) => c.name));
+
+    if (!colNames.has('install_size_status')) {
+      db.exec("ALTER TABLE games ADD COLUMN install_size_status TEXT NOT NULL DEFAULT 'UNKNOWN'");
+    }
+    if (!colNames.has('install_size_source')) {
+      db.exec("ALTER TABLE games ADD COLUMN install_size_source TEXT NOT NULL DEFAULT 'unknown'");
+    }
+    if (!colNames.has('install_size_updated_at')) {
+      db.exec("ALTER TABLE games ADD COLUMN install_size_updated_at TEXT NULL");
+    }
+
+    // Backfill existing games with known sizes
+    db.exec(`
+      UPDATE games
+      SET install_size_status = 'KNOWN',
+          install_size_source = 'metadata'
+      WHERE installed_size > 0 AND install_size_status = 'UNKNOWN';
+    `);
+
+    db.pragma('user_version = 3');
+    console.log('[Migrations] Migration 3 applied successfully. Schema version is now 3.');
+  }
+
+  // Migration 4: Hidden/Excluded Games (v1.0.3)
+  if (currentVersion < 4) {
+    console.log('[Migrations] Applying Migration 4: Hidden/Excluded games support...');
+    if (dbPath && dbPath !== ':memory:' && fs.existsSync(dbPath)) {
+      try {
+        fs.copyFileSync(dbPath, `${dbPath}.backup_v3`);
+      } catch (e) {}
+    }
+
+    const columns = db.pragma('table_info(games)') as { name: string }[];
+    const colNames = new Set(columns.map((c) => c.name));
+
+    if (!colNames.has('is_hidden')) {
+      db.exec('ALTER TABLE games ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0');
+    }
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_games_hidden ON games(is_hidden);
+    `);
+
+    db.pragma('user_version = 4');
+    console.log('[Migrations] Migration 4 applied successfully. Schema version is now 4.');
+  }
 }
+

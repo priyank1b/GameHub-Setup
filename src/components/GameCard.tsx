@@ -17,6 +17,7 @@ import {
   Trash2,
   Info,
   Play,
+  EyeOff,
 } from 'lucide-react';
 
 import { formatImageUrl } from '../utils/formatImage';
@@ -29,6 +30,7 @@ interface GameCardProps {
   onClick?: (game: Game) => void;
   onLocate?: (game: Game) => void;
   onRemove?: (game: Game) => void;
+  onHide?: (game: Game) => void;
   onFocus?: (game: Game) => void;
 }
 
@@ -39,6 +41,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
   onClick,
   onLocate,
   onRemove,
+  onHide,
   onFocus,
 }) => {
   const [imgError, setImgError] = useState(false);
@@ -157,10 +160,47 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
     return `${hours}h played`;
   };
 
-  const formatSize = (bytes?: number) => {
-    if (!bytes) return null;
-    const gb = (bytes / (1024 * 1024 * 1024)).toFixed(1);
-    return `${gb} GB`;
+  const renderCardSize = () => {
+    if (game.installSizeStatus === 'CALCULATING') {
+      return (
+        <span className="text-amber-400/90 text-[10px] bg-black/50 px-1.5 py-0.5 rounded backdrop-blur-sm font-sans font-medium">
+          Calculating…
+        </span>
+      );
+    }
+    if (game.installSizeStatus === 'ACCESS_DENIED') {
+      return (
+        <span className="text-rose-400/90 text-[10px] bg-black/50 px-1.5 py-0.5 rounded backdrop-blur-sm font-sans font-medium" title="Access denied">
+          Access denied
+        </span>
+      );
+    }
+    if (game.installSizeStatus === 'UNKNOWN') {
+      return (
+        <span className="text-zinc-500 text-[10px] bg-black/50 px-1.5 py-0.5 rounded backdrop-blur-sm font-sans font-medium" title="Size unavailable">
+          Size unavailable
+        </span>
+      );
+    }
+    const bytes = game.installSizeBytes ?? game.installedSize;
+    if (bytes && bytes > 0) {
+      const sizeStr = bytes >= 1024 * 1024 * 1024
+        ? `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+        : `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+      return (
+        <span className="bg-black/50 px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
+          {sizeStr}
+        </span>
+      );
+    }
+    if (game.installSizeStatus === 'KNOWN') {
+      return (
+        <span className="bg-black/50 px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
+          0 B
+        </span>
+      );
+    }
+    return null;
   };
 
   return (
@@ -233,7 +273,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
             {isMissing && (
               <span className="inline-flex items-center gap-1 bg-amber-500/95 text-zinc-950 font-bold px-1.5 py-0.5 rounded text-[10px] tracking-wider uppercase shadow-md backdrop-blur-sm">
                 <AlertTriangle className="w-3 h-3 text-zinc-950" />
-                Missing
+                Missing / Moved
               </span>
             )}
           </div>
@@ -290,7 +330,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
               {game.drive}
             </span>
           )}
-          {game.installedSize && <span>{formatSize(game.installedSize)}</span>}
+          {renderCardSize()}
         </div>
       </div>
 
@@ -420,9 +460,22 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
                     <span>{game.isFavorite ? 'Unfavorite' : 'Add to Favorites'}</span>
                   </button>
 
+                  {/* 4. Hide Game */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onHide?.(game);
+                    }}
+                    className="w-full text-left px-3 py-2 text-zinc-300 hover:text-white hover:bg-zinc-800 flex items-center gap-2.5 transition-colors cursor-pointer font-medium"
+                  >
+                    <EyeOff className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <span>Hide Game</span>
+                  </button>
+
                   <div className="my-1 border-t border-zinc-700/60" />
 
-                  {/* 4. Remove */}
+                  {/* 5. Remove */}
                   <button
                     type="button"
                     onClick={() => {

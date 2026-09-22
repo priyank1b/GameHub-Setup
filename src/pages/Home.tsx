@@ -2,7 +2,7 @@ import React from 'react';
 import { Game } from '../types/Game';
 import { GameGrid } from '../components/GameGrid';
 import { PlayButton } from '../components/PlayButton';
-import { Sparkles, Clock, Gamepad2, Layers, HardDrive, Database } from 'lucide-react';
+import { Sparkles, Clock, Gamepad2, Layers, HardDrive, Database, AlertTriangle, FolderSearch } from 'lucide-react';
 import { PageRoute } from '../types/Navigation';
 import { FocusableItem } from '../components/FocusableItem';
 import { formatImageUrl } from '../utils/formatImage';
@@ -16,6 +16,7 @@ interface HomeProps {
   onFocusGame?: (game: Game) => void;
   onLocate?: (game: Game) => void;
   onRemove?: (game: Game) => void;
+  onHide?: (game: Game) => void;
 }
 
 export const Home: React.FC<HomeProps> = ({
@@ -27,6 +28,7 @@ export const Home: React.FC<HomeProps> = ({
   onFocusGame,
   onLocate,
   onRemove,
+  onHide,
 }) => {
   const [driveCount, setDriveCount] = React.useState<number>(5);
 
@@ -62,7 +64,7 @@ export const Home: React.FC<HomeProps> = ({
       ? `${Math.ceil(totalPlaySeconds / 60)} mins`
       : '0 hrs';
 
-  const totalSizeBytes = games.reduce((acc, g) => acc + (g.installedSize || 0), 0);
+  const totalSizeBytes = games.reduce((acc, g) => acc + (g.installSizeBytes ?? g.installedSize ?? 0), 0);
   const totalStorageDisplay =
     totalSizeBytes >= 1024 * 1024 * 1024 * 1024
       ? `${(totalSizeBytes / (1024 * 1024 * 1024 * 1024)).toFixed(2)} TB`
@@ -70,8 +72,16 @@ export const Home: React.FC<HomeProps> = ({
       ? `${(totalSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
       : '0 GB';
 
+  const installedGames = games.filter((g) => g.isInstalled);
+  const missingGamesCount = games.length - installedGames.length;
+
   const featuredGame =
-    games.find((g) => g.lastPlayedAt) || games.find((g) => g.isFavorite) || games[0] || null;
+    installedGames.find((g) => g.lastPlayedAt) ||
+    installedGames.find((g) => g.isFavorite) ||
+    installedGames[0] ||
+    games.find((g) => g.lastPlayedAt) ||
+    games[0] ||
+    null;
 
   const recentGames = games
     .filter((g) => Boolean(g.lastPlayedAt))
@@ -94,10 +104,17 @@ export const Home: React.FC<HomeProps> = ({
           </div>
 
           <div className="relative z-10 p-8 sm:p-10 max-w-2xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 text-xs font-semibold tracking-wide">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>READY TO PLAY</span>
-            </div>
+            {featuredGame.isInstalled ? (
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 text-xs font-semibold tracking-wide">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>READY TO PLAY</span>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold tracking-wide">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                <span>FILE MOVED OR MISSING</span>
+              </div>
+            )}
 
             <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-['Outfit']">
               {featuredGame.name}
@@ -112,15 +129,34 @@ export const Home: React.FC<HomeProps> = ({
                 id="hero-resume-game"
                 scope="main"
                 group="hero"
-                onConfirm={() => onLaunch(featuredGame)}
+                onConfirm={() =>
+                  featuredGame.isInstalled
+                    ? onLaunch(featuredGame)
+                    : onLocate
+                    ? onLocate(featuredGame)
+                    : onSelectGame?.(featuredGame)
+                }
               >
                 {({ ref, isFocused }) => (
                   <div ref={ref} className={isFocused ? 'controller-focus rounded-xl' : ''}>
-                    <PlayButton
-                      label="RESUME GAME"
-                      size="lg"
-                      onPlay={() => onLaunch(featuredGame)}
-                    />
+                    {featuredGame.isInstalled ? (
+                      <PlayButton
+                        label="RESUME GAME"
+                        size="lg"
+                        onPlay={() => onLaunch(featuredGame)}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onLocate ? onLocate(featuredGame) : onSelectGame?.(featuredGame)
+                        }
+                        className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-sm tracking-wider uppercase shadow-lg shadow-amber-500/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                      >
+                        <FolderSearch className="w-5 h-5" />
+                        <span>LOCATE GAME</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </FocusableItem>
@@ -158,7 +194,14 @@ export const Home: React.FC<HomeProps> = ({
           </div>
           <div>
             <p className="text-xs text-zinc-400 uppercase tracking-wider font-medium">Installed Games</p>
-            <p className="text-2xl font-bold text-white font-['Outfit']">{games.length}</p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-2xl font-bold text-white font-['Outfit']">{installedGames.length}</p>
+              {missingGamesCount > 0 && (
+                <span className="text-[11px] font-medium text-amber-400 font-mono">
+                  ({missingGamesCount} missing)
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -221,6 +264,9 @@ export const Home: React.FC<HomeProps> = ({
             onLaunch={onLaunch}
             onSelectGame={onSelectGame}
             onFocusGame={onFocusGame}
+            onLocate={onLocate}
+            onRemove={onRemove}
+            onHide={onHide}
           />
         ) : (
           <div className="p-8 rounded-2xl bg-surface-850/60 border border-zinc-800/80 text-center flex flex-col items-center justify-center space-y-2">
@@ -259,6 +305,7 @@ export const Home: React.FC<HomeProps> = ({
           onFocusGame={onFocusGame}
           onLocate={onLocate}
           onRemove={onRemove}
+          onHide={onHide}
         />
       </section>
     </div>

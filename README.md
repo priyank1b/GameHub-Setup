@@ -1,6 +1,6 @@
 # GameHub 🎮 — Unified PC Game Library & Launcher
 
-[![Release](https://img.shields.io/badge/release-v1.0.2-teal.svg)](https://github.com/priyank1b/GameHub-Setup/releases)
+[![Release](https://img.shields.io/badge/release-v1.0.3-teal.svg)](https://github.com/priyank1b/GameHub-Setup/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](https://github.com/priyank1b/GameHub-Setup)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Framework](https://img.shields.io/badge/Electron-33.x-47848F.svg)](https://www.electronjs.org/)
@@ -14,6 +14,14 @@
 
 ## ✨ Features
 
+- 🔄 **Automatic Game Rescan (v1.0.3)**:
+  - Configurable session-tied background timer (15m to 24h, default OFF) that discovers newly installed games automatically.
+  - Collision-free: skips scheduled cycles when a manual scan is already active.
+  - Instant live library update when new games are discovered.
+- 📊 **Unified Storage Detection (v1.0.3)**:
+  - Accurate game installation sizing prioritizing launcher manifests (Steam ACF, Epic `.item`, GOG metadata) with asynchronous recursive folder calculation for standalone titles.
+  - Honest status tracking: `KNOWN`, `CALCULATING`, `UNKNOWN`, and `ACCESS_DENIED`. Never produces false `0 B` or `0.0 GB` results.
+  - Non-elevated Microsoft Store / Xbox inspection without taking ownership or altering WindowsApps ACLs.
 - 🎮 **Full Gamepad & Controller Support (v1.0.1)**:
   - Plug-and-play support for Xbox, PlayStation (DualShock/DualSense), and generic PC gamepads.
   - 2D spatial navigation across library, sidebar, search, tabs, filters, and modal dialogs.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Sliders,
   FolderPlus,
@@ -18,9 +18,13 @@ import {
   Gamepad2,
   CheckCircle2,
   XCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { APP_CONFIG } from '../config/appConfig';
 import { WindowsDrive } from '../types/Drive';
+import { Game } from '../types/Game';
+import { formatImageUrl } from '../utils/formatImage';
 import { useNavigation } from '../context/NavigationContext';
 import { FocusableItem } from '../components/FocusableItem';
 
@@ -53,6 +57,13 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
   const [newPath, setNewPath] = useState('');
   const [isScanningStandalone, setIsScanningStandalone] = useState(false);
   const [scanResultFeedback, setScanResultFeedback] = useState<string | null>(null);
+
+  // Auto-rescan state (v1.0.3)
+  const [autoRescanEnabled, setAutoRescanEnabled] = useState(false);
+  const [autoRescanInterval, setAutoRescanInterval] = useState(60);
+  const [lastAutoScanTime, setLastAutoScanTime] = useState<string | undefined>(undefined);
+  const [nextAutoScanTime, setNextAutoScanTime] = useState<string | undefined>(undefined);
+  const [isAutoScanning, setIsAutoScanning] = useState(false);
 
   // Available drives state
   const [settingsDrives, setSettingsDrives] = useState<WindowsDrive[]>([]);
@@ -101,9 +112,43 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
       }
     }
 
+    async function loadAutoRescan() {
+      if (window.gameHub?.scanner?.getAutoRescanStatus) {
+        try {
+          const status = await window.gameHub.scanner.getAutoRescanStatus();
+          if (status) {
+            setAutoRescanEnabled(status.enabled);
+            setAutoRescanInterval(status.intervalMinutes);
+            setLastAutoScanTime(status.lastScanTime);
+            setNextAutoScanTime(status.nextScanTime);
+            setIsAutoScanning(status.isScanning);
+          }
+        } catch {}
+      }
+    }
+
     loadSettingsDrives();
     loadSavedLocations();
-  }, []);
+    loadAutoRescan();
+
+    const unsubscribeStatus = window.gameHub?.scanner?.onAutoRescanStatus?.((status) => {
+      setAutoRescanEnabled(status.enabled);
+      setAutoRescanInterval(status.intervalMinutes);
+      setLastAutoScanTime(status.lastScanTime);
+      setNextAutoScanTime(status.nextScanTime);
+      setIsAutoScanning(status.isScanning);
+    });
+
+    const unsubscribeNewGames = window.gameHub?.scanner?.onNewGamesDiscovered?.((data) => {
+      setScanResultFeedback(`Library updated: Discovered ${data.count} newly installed game(s)!`);
+      onLibraryUpdated?.();
+    });
+
+    return () => {
+      unsubscribeStatus?.();
+      unsubscribeNewGames?.();
+    };
+  }, [onLibraryUpdated]);
 
   const toggleDriveInclusion = async (letter: string) => {
     const drive = settingsDrives.find((d) => d.letter === letter);
@@ -178,6 +223,90 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
     }
 
     setIsScanningStandalone(false);
+  };
+
+  const handleToggleAutoRescan = async (enabled: boolean) => {
+    setAutoRescanEnabled(enabled);
+    if (window.gameHub?.scanner?.setAutoRescan) {
+      try {
+        const res = await window.gameHub.scanner.setAutoRescan(enabled, autoRescanInterval);
+        if (res) {
+          setNextAutoScanTime(res.nextScanTime);
+        }
+      } catch (err: any) {
+        console.error('[Settings] setAutoRescan error:', err.message);
+      }
+    }
+  };
+
+  const handleChangeAutoRescanInterval = async (interval: number) => {
+    setAutoRescanInterval(interval);
+    if (window.gameHub?.scanner?.setAutoRescan) {
+      try {
+        const res = await window.gameHub.scanner.setAutoRescan(autoRescanEnabled, interval);
+        if (res) {
+          setNextAutoScanTime(res.nextScanTime);
+        }
+      } catch (err: any) {
+        console.error('[Settings] change interval error:', err.message);
+      }
+    }
+  };
+
+  const handleTriggerAutoRescanNow = async () => {
+    setIsAutoScanning(true);
+    setScanResultFeedback(null);
+    try {
+      if (window.gameHub?.scanner?.triggerAutoRescan) {
+        const res = await window.gameHub.scanner.triggerAutoRescan();
+        if (res.result?.newGamesAdded > 0) {
+          setScanResultFeedback(`Rescan complete: Added ${res.result.newGamesAdded} new game(s)!`);
+          onLibraryUpdated?.();
+        } else {
+          setScanResultFeedback('Rescan complete: Game library is up to date.');
+        }
+      }
+    } catch (err: any) {
+      setScanResultFeedback(`Rescan error: ${err.message}`);
+    } finally {
+      setIsAutoScanning(false);
+    }
+  };
+
+  // Hidden games state & management
+  const [hiddenGames, setHiddenGames] = useState<Game[]>([]);
+  const [isLoadingHidden, setIsLoadingHidden] = useState<boolean>(false);
+
+  const loadHiddenGames = useCallback(async () => {
+    if (window.gameHub?.games?.getHidden) {
+      setIsLoadingHidden(true);
+      try {
+        const hidden = await window.gameHub.games.getHidden();
+        setHiddenGames(hidden || []);
+      } catch (err: any) {
+        console.error('[Settings] Error fetching hidden games:', err.message);
+      } finally {
+        setIsLoadingHidden(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'library') {
+      loadHiddenGames();
+    }
+  }, [activeTab, loadHiddenGames]);
+
+  const handleUnhideGame = async (gameId: number) => {
+    try {
+      if (window.gameHub?.games?.unhide) {
+        await window.gameHub.games.unhide(gameId);
+        setHiddenGames((prev) => prev.filter((g) => g.id !== gameId));
+        onLibraryUpdated?.();
+      }
+    } catch (err: any) {
+      console.error('[Settings] Failed to unhide game:', err.message);
+    }
   };
 
   return (
@@ -391,6 +520,223 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
                   </label>
                 ))}
               </div>
+            </div>
+
+            {/* Automatic Game Rescan Section (v1.0.3) */}
+            <div className="pt-5 border-t border-zinc-800/80 space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h4 className="font-bold text-sm text-zinc-100 flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-teal-400" />
+                    Automatic Game Rescan
+                  </h4>
+                  <p className="text-xs text-zinc-400">
+                    Periodically discovers newly installed games in background across all drives and launchers.
+                  </p>
+                </div>
+
+                <FocusableItem
+                  id="settings-rescan-now-btn"
+                  scope="main"
+                  group="library"
+                  onConfirm={handleTriggerAutoRescanNow}
+                >
+                  {({ ref, isFocused }) => (
+                    <button
+                      ref={ref}
+                      type="button"
+                      onClick={handleTriggerAutoRescanNow}
+                      disabled={isAutoScanning || isScanningStandalone}
+                      className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shadow-md shadow-teal-500/10 ${
+                        isFocused ? 'controller-focus' : ''
+                      }`}
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isAutoScanning ? 'animate-spin' : ''}`} />
+                      <span>{isAutoScanning ? 'Rescanning...' : 'Rescan Now'}</span>
+                    </button>
+                  )}
+                </FocusableItem>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 space-y-4">
+                <FocusableItem
+                  id="settings-auto-rescan-toggle"
+                  scope="main"
+                  group="library"
+                  onConfirm={() => handleToggleAutoRescan(!autoRescanEnabled)}
+                >
+                  {({ ref, isFocused }) => (
+                    <label
+                      ref={ref}
+                      className={`flex items-center justify-between cursor-pointer p-1 rounded-lg ${
+                        isFocused ? 'ring-2 ring-teal-400 bg-zinc-800/40' : ''
+                      }`}
+                    >
+                      <div>
+                        <span className="text-xs font-semibold text-zinc-200">
+                          Automatically rescan for newly installed games
+                        </span>
+                        <p className="text-[11px] text-zinc-500">
+                          Session-tied timer starts on app launch and automatically pauses when closed.
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={autoRescanEnabled}
+                        onChange={(e) => handleToggleAutoRescan(e.target.checked)}
+                        className="w-4 h-4 accent-teal-500 rounded cursor-pointer"
+                      />
+                    </label>
+                  )}
+                </FocusableItem>
+
+                {autoRescanEnabled && (
+                  <div className="pt-3 border-t border-zinc-800 flex items-center justify-between flex-wrap gap-3 text-xs">
+                    <span className="text-zinc-300 font-medium">Rescan interval</span>
+                    <FocusableItem
+                      id="settings-auto-rescan-interval"
+                      scope="main"
+                      group="library"
+                    >
+                      {({ ref, isFocused }) => (
+                        <select
+                          ref={ref}
+                          value={autoRescanInterval}
+                          onChange={(e) => handleChangeAutoRescanInterval(Number(e.target.value))}
+                          className={`bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs text-zinc-100 font-medium cursor-pointer focus:outline-none focus:border-teal-500 ${
+                            isFocused ? 'controller-focus' : ''
+                          }`}
+                        >
+                          <option value={15}>15 minutes</option>
+                          <option value={30}>30 minutes</option>
+                          <option value={60}>1 hour</option>
+                          <option value={120}>2 hours</option>
+                          <option value={360}>6 hours</option>
+                          <option value={720}>12 hours</option>
+                          <option value={1440}>24 hours</option>
+                        </select>
+                      )}
+                    </FocusableItem>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-zinc-800/60 text-[11px] font-mono text-zinc-400">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-zinc-500 font-sans">Last automatic scan:</span>
+                    <span className="text-zinc-300">
+                      {lastAutoScanTime ? new Date(lastAutoScanTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-zinc-500 font-sans">Next automatic scan:</span>
+                    <span className="text-zinc-300">
+                      {autoRescanEnabled && nextAutoScanTime
+                        ? new Date(nextAutoScanTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : 'Disabled'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between">
+                  <span className="text-[11px] text-zinc-500 font-sans">
+                    Force an immediate scan cycle safely
+                  </span>
+                  <FocusableItem
+                    id="settings-auto-rescan-trigger-btn"
+                    scope="main"
+                    group="library"
+                    onConfirm={handleTriggerAutoRescanNow}
+                  >
+                    {({ ref, isFocused }) => (
+                      <button
+                        ref={ref}
+                        type="button"
+                        onClick={handleTriggerAutoRescanNow}
+                        disabled={isAutoScanning}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border border-teal-500/30 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 ${
+                          isFocused ? 'controller-focus' : ''
+                        }`}
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isAutoScanning ? 'animate-spin' : ''}`} />
+                        <span>{isAutoScanning ? 'Scanning...' : 'Rescan Now'}</span>
+                      </button>
+                    )}
+                  </FocusableItem>
+                </div>
+              </div>
+            </div>
+
+            {/* Hidden & Excluded Games Management */}
+            <div className="p-6 rounded-2xl bg-surface-850 border border-zinc-800 space-y-5">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h3 className="font-bold text-base text-zinc-100 flex items-center gap-2">
+                    <EyeOff className="w-4 h-4 text-amber-400" />
+                    Hidden & Excluded Games
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Games marked as hidden are removed from your library and will never be re-added by automatic or manual rescans.
+                  </p>
+                </div>
+                <span className="text-xs font-mono px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300">
+                  {hiddenGames.length} Hidden
+                </span>
+              </div>
+
+              {isLoadingHidden ? (
+                <div className="p-6 rounded-xl bg-zinc-900/60 border border-zinc-800/60 text-center text-xs text-zinc-500 flex items-center justify-center gap-2">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Loading hidden games...</span>
+                </div>
+              ) : hiddenGames.length === 0 ? (
+                <div className="p-6 rounded-xl bg-zinc-900/60 border border-zinc-800/60 text-center text-xs text-zinc-500">
+                  No games are currently hidden. You can hide any game from its context menu (•••) or game details modal.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {hiddenGames.map((game) => (
+                    <div
+                      key={game.id}
+                      className="flex items-center justify-between p-3 rounded-xl bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700/80 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {game.coverImage ? (
+                          <img
+                            src={formatImageUrl(game.coverImage)}
+                            alt={game.name}
+                            className="w-10 h-10 rounded-lg object-cover bg-zinc-800 flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0 text-zinc-500">
+                            <Gamepad2 className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <h5 className="text-xs font-bold text-zinc-200 truncate">{game.name}</h5>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{game.launcher}</span>
+                            {game.drive && (
+                              <span className="text-[10px] font-mono text-zinc-600 bg-zinc-800/60 px-1.5 py-0.5 rounded">
+                                {game.drive}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleUnhideGame(game.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-teal-400 hover:text-teal-300 border border-zinc-700/60 hover:border-teal-500/40 text-xs font-semibold transition-all cursor-pointer flex-shrink-0 shadow-sm"
+                        title="Restore game to library and enable scanning"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Unhide & Restore</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

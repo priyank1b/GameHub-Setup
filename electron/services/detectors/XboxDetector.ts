@@ -273,7 +273,28 @@ export class XboxDetector implements GameDetector {
 
       const driveMatch = gameDir.match(/^([A-Za-z]:)/);
       const drive = driveMatch ? driveMatch[1].toUpperCase() : 'C:';
-      const installedSize = this.calculateFolderSize(gameDir);
+      
+      const isWindowsApps = gameDir.toLowerCase().includes('windowsapps');
+      let installedSize: number | undefined;
+      let installSizeStatus: 'KNOWN' | 'CALCULATING' | 'UNKNOWN' | 'ACCESS_DENIED' = 'UNKNOWN';
+      let installSizeSource: 'metadata' | 'filesystem' | 'package' | 'unknown' = isWindowsApps ? 'package' : 'filesystem';
+
+      if (!isWindowsApps && fs.existsSync(gameDir)) {
+        installedSize = this.calculateFolderSize(gameDir);
+        if (installedSize && installedSize > 0) {
+          installSizeStatus = 'KNOWN';
+        }
+      } else if (isWindowsApps) {
+        try {
+          fs.readdirSync(gameDir);
+          installedSize = this.calculateFolderSize(gameDir);
+          if (installedSize && installedSize > 0) {
+            installSizeStatus = 'KNOWN';
+          }
+        } catch {
+          installSizeStatus = 'ACCESS_DENIED';
+        }
+      }
 
       return {
         name: storeMeta?.title || name,
@@ -287,6 +308,9 @@ export class XboxDetector implements GameDetector {
         coverImage,
         backgroundImage,
         installedSize,
+        installSizeBytes: installedSize,
+        installSizeStatus,
+        installSizeSource,
         genre: 'Game',
         description: storeMeta?.description || `Xbox installation for ${name}.`,
         developer: storeMeta?.developer,
@@ -405,6 +429,28 @@ export class XboxDetector implements GameDetector {
           if (storeMeta.backgroundImage) backgroundImage = storeMeta.backgroundImage;
         }
 
+        const isWindowsApps = installPath.toLowerCase().includes('windowsapps');
+        let installedSize: number | undefined;
+        let installSizeStatus: 'KNOWN' | 'CALCULATING' | 'UNKNOWN' | 'ACCESS_DENIED' = 'UNKNOWN';
+        let installSizeSource: 'metadata' | 'filesystem' | 'package' | 'unknown' = isWindowsApps ? 'package' : 'filesystem';
+
+        if (!isWindowsApps && fs.existsSync(installPath)) {
+          installedSize = this.calculateFolderSize(installPath);
+          if (installedSize && installedSize > 0) {
+            installSizeStatus = 'KNOWN';
+          }
+        } else if (isWindowsApps) {
+          try {
+            fs.readdirSync(installPath);
+            installedSize = this.calculateFolderSize(installPath);
+            if (installedSize && installedSize > 0) {
+              installSizeStatus = 'KNOWN';
+            }
+          } catch {
+            installSizeStatus = 'ACCESS_DENIED';
+          }
+        }
+
         const candidate: GameCandidate = {
           name: storeMeta?.title || name.trim(),
           launcher: 'XBOX',
@@ -416,6 +462,10 @@ export class XboxDetector implements GameDetector {
           iconPath,
           coverImage,
           backgroundImage,
+          installedSize,
+          installSizeBytes: installedSize,
+          installSizeStatus,
+          installSizeSource,
           genre: 'Game',
           description: storeMeta?.description || `Windows / Xbox Store game: ${name}.`,
           developer: storeMeta?.developer,
