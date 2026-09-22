@@ -2,7 +2,7 @@ import React from 'react';
 import { Game } from '../types/Game';
 import { PlayButton } from '../components/PlayButton';
 import { LauncherBadge } from '../components/LauncherBadge';
-import { Clock, Calendar, Play, HardDrive, Gamepad2, AlertTriangle } from 'lucide-react';
+import { Clock, Calendar, Play, HardDrive, Gamepad2, AlertTriangle, FolderSearch } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import { PageRoute } from '../types/Navigation';
 import { FocusableItem } from '../components/FocusableItem';
@@ -12,12 +12,16 @@ interface RecentlyPlayedProps {
   games: Game[];
   onLaunch: (game: Game) => void;
   onNavigate?: (page: PageRoute) => void;
+  onSelectGame?: (game: Game) => void;
+  onLocate?: (game: Game) => void;
 }
 
 export const RecentlyPlayed: React.FC<RecentlyPlayedProps> = ({
   games,
   onLaunch,
   onNavigate,
+  onSelectGame,
+  onLocate,
 }) => {
   const recentGames = games.filter((g) => g.lastPlayedAt);
 
@@ -59,17 +63,21 @@ export const RecentlyPlayed: React.FC<RecentlyPlayedProps> = ({
               id={`recent-game-${game.id}`}
               scope="main"
               group="recently-played"
-              onConfirm={() => onLaunch(game)}
+              onConfirm={() => (game.isInstalled ? onLaunch(game) : (onLocate ? onLocate(game) : onSelectGame?.(game)))}
             >
               {({ ref, isFocused }) => (
                 <div
                   ref={ref}
+                  onClick={() => onSelectGame?.(game)}
                   className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl bg-surface-850 border transition-all hover:bg-zinc-800/40 cursor-pointer ${
                     isFocused
-                      ? 'controller-focus border-teal-500'
+                      ? !game.isInstalled
+                        ? 'controller-focus border-amber-500'
+                        : 'controller-focus border-teal-500'
+                      : !game.isInstalled
+                      ? 'border-amber-500/30 hover:border-amber-400/60'
                       : 'border-zinc-800/80 hover:border-teal-500/40'
                   }`}
-                  onClick={() => onLaunch(game)}
                 >
                   {/* Left Info with Thumbnail */}
                   <div className="flex items-center gap-4">
@@ -122,13 +130,27 @@ export const RecentlyPlayed: React.FC<RecentlyPlayedProps> = ({
                     </div>
                   </div>
 
-                  {/* Right Quick Play Button */}
+                  {/* Right Quick Action: Play or Locate */}
                   <div className="self-end sm:self-center">
-                    <PlayButton
-                      label="PLAY NOW"
-                      size="sm"
-                      onPlay={() => onLaunch(game)}
-                    />
+                    {!game.isInstalled ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onLocate?.(game);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs tracking-wider uppercase shadow-md shadow-amber-500/20 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                      >
+                        <FolderSearch className="w-3.5 h-3.5" />
+                        <span>Locate</span>
+                      </button>
+                    ) : (
+                      <PlayButton
+                        label="PLAY NOW"
+                        size="sm"
+                        onPlay={() => onLaunch(game)}
+                      />
+                    )}
                   </div>
                 </div>
               )}

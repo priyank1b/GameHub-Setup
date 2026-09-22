@@ -16,6 +16,9 @@ export interface GameCandidate {
   genre?: string;
   releaseDate?: string;
   installedSize?: number;
+  installSizeBytes?: number;
+  installSizeStatus?: 'KNOWN' | 'CALCULATING' | 'UNKNOWN' | 'ACCESS_DENIED';
+  installSizeSource?: 'metadata' | 'filesystem' | 'package' | 'unknown';
   drive?: string;
   totalPlayTime?: number;
   lastPlayedAt?: string;

@@ -2,6 +2,63 @@
 
 All notable changes to GameHub are documented in this file.
 
+## [1.0.3] - 2026-09-22
+
+### Added — Unified Storage Detection & Automatic Rescan
+
+#### Unified Local Storage Resolver
+- **Multi-Launcher Manifest Prioritization**:
+  - Queries Steam ACF manifests (`SizeOnDisk`), Epic Games Store `.item` files (`InstalledSize`), and GOG Galaxy metadata before resorting to disk traversal.
+  - Non-blocking, asynchronous BFS directory traversal for standalone titles and unindexed libraries: skips symlinks/reparse points, limits traversal depth to 15, and yields the event loop periodically to keep the renderer completely stutter-free.
+  - In-flight deduplication and a 2-slot concurrency limiter to avoid disk thrashing when analyzing large collections.
+
+#### Honest Storage Size States (Never Fake 0 B)
+- **Status-Aware Size Tracking**:
+  - Replaces ambiguous numbers with explicit states: `KNOWN`, `CALCULATING`, `UNKNOWN`, and `ACCESS_DENIED`.
+  - UI strictly renders formatted values (`14.2 GB`, `850 MB`), `Calculating…`, `Size unavailable`, or `Access denied`. Never converts permission errors or missing installations into a fake `0 B` or `0.0 GB`.
+- **Safe Microsoft Store & Xbox Handling**:
+  - Non-elevated inspection of `XboxGames` and `WindowsApps` via supported package discovery.
+  - Guaranteed never to invoke `takeown`, modify ACLs, or elevate permissions. Protected inaccessible packages cleanly display `Access denied` or `Size unavailable`.
+
+#### Session-Tied Background Auto-Rescan
+- **Configurable Interval Scanner**:
+  - Optional background scanning for newly installed games at intervals of 15m, 30m, 1h, 2h, 6h, 12h, or 24h (Default: OFF).
+  - Session-tied lifecycle: timer exists only while GameHub is running; exiting cleanly stops the timer, and reopening resets from zero without backlog catch-up spikes.
+  - Collision prevention: automatically skips a scheduled cycle if a manual scan is already running, preventing dual-scanning lockups.
+  - Live discovery notification: broadcasts real-time discovery count and updates the library immediately without requiring a manual refresh.
+
+#### Settings & UI Enhancements
+- **Automatic Game Rescan Card**:
+  - Dedicated controls in Settings under the Library tab for toggling auto-rescan, choosing intervals, viewing last & next scheduled scan times, and triggering an immediate scan.
+  - Full gamepad/controller navigation support via `FocusableItem`.
+- **Game Details Modal & Game Cards**:
+  - Game Details modal displays size status, resolution source (`via metadata`, `via filesystem`, `via package`), and includes a one-click manual recalculate button.
+  - Game cards show real-time storage status on the artwork overlay with clean typography and badges.
+
+#### Permanent "Hide Game" & Exclusion Management
+- **Database Schema Migration 4**:
+  - Added `is_hidden INTEGER NOT NULL DEFAULT 0` column with index `idx_games_hidden`.
+  - Hidden games are excluded from all library and favorites views by default.
+  - Scanner deduplication indexing preserves hidden game status so hidden titles are **never** re-added or resurrected during future automatic or manual scans.
+- **Context Menus & Game Details Actions**:
+  - Added "Hide Game" with `EyeOff` icon to the card 3-dots menu and Game Details modal.
+- **Settings Restore Management**:
+  - Added a dedicated "Hidden & Excluded Games" section in Settings > Library & Folders allowing one-click unhiding and restoration of any previously hidden game.
+
+#### Relocation & Path Movement Detection
+- **Cross-Drive Steam Movement**:
+  - Dynamic path and drive updates in `GameScanner` pipeline when games are moved or reinstalled onto different drives (e.g. D: to C:).
+  - `games:checkMissing` automatically probes connected drives for relocated Steam ACF manifests.
+- **Fix Duplicate File Dialogs**:
+  - Removed duplicate folder fallback when cancelling "Locate Game" file picker.
+
+#### Sleek Dark-Themed Modal Alerts
+- **Custom ConfirmModal Component**:
+  - Completely replaced native OS/browser white `window.confirm()` and `window.alert()` popups with a dark glassmorphic dialog matching GameHub's UI (`bg-surface-850`, `border-zinc-800`, custom glowing action badges, Outfit typography, and full keyboard/controller navigation).
+  - Global `window.alert` interception prevents native alert popups across the entire application.
+
+---
+
 ## [1.0.2] - 2026-09-20
 
 ### Fixed — Card Context Menu Clarity & Typography

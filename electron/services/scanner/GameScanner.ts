@@ -211,7 +211,7 @@ export class GameScanner {
         foundCount: deduplicatedCandidates.length,
       });
 
-      const existingGames = this.gameRepo.getAll();
+      const existingGames = this.gameRepo.getAll(true);
       const existingByLauncherApp = new Map<string, typeof existingGames[0]>();
       const existingByInstall = new Map<string, typeof existingGames[0]>();
       const existingByExe = new Map<string, typeof existingGames[0]>();
@@ -289,16 +289,40 @@ export class GameScanner {
           let needsUpdate = false;
           const updates: Partial<typeof existing> = {};
 
-          if (!existing.isInstalled) {
+          // If game is not hidden, ensure isInstalled is true
+          if (!existing.isHidden && !existing.isInstalled) {
             updates.isInstalled = true;
+            existing.isInstalled = true;
             needsUpdate = true;
           }
-          if (!existing.executablePath && cand.executablePath) {
+          // Location updates (game moved, reinstalled in another library/drive, or updated directory):
+          if (cand.executablePath && cand.executablePath !== existing.executablePath) {
             updates.executablePath = cand.executablePath;
+            if (existing.executablePath) {
+              existingByExe.delete(this.normalizePath(existing.executablePath));
+            }
+            existing.executablePath = cand.executablePath;
+            existingByExe.set(normExe, existing);
+            needsUpdate = true;
+          }
+          if (cand.installPath && cand.installPath !== existing.installPath) {
+            updates.installPath = cand.installPath;
+            existingByInstall.delete(this.normalizePath(existing.installPath));
+            existing.installPath = cand.installPath;
+            existingByInstall.set(normInstall, existing);
+            needsUpdate = true;
+          }
+          if (candDrive && candDrive !== existing.drive) {
+            updates.drive = candDrive;
+            existing.drive = candDrive;
             needsUpdate = true;
           }
           if (cand.installedSize && (!existing.installedSize || existing.installedSize === 0 || existing.installedSize < cand.installedSize)) {
             updates.installedSize = cand.installedSize;
+            updates.installSizeBytes = cand.installedSize;
+            updates.installSizeStatus = cand.installSizeStatus || 'KNOWN';
+            updates.installSizeSource = cand.installSizeSource || 'metadata';
+            updates.installSizeUpdatedAt = new Date().toISOString();
             needsUpdate = true;
           }
           if (cand.coverImage && (!existing.coverImage || existing.coverImage !== cand.coverImage)) {
@@ -405,9 +429,11 @@ export class GameScanner {
               developer: cand.developer,
               publisher: cand.publisher,
               genre: cand.genre,
-              releaseDate: cand.releaseDate,
-              installedSize: cand.installedSize || 0,
-              isFavorite: false,
+              installedSize: cand.installedSize || cand.installSizeBytes || 0,
+              installSizeBytes: cand.installedSize || cand.installSizeBytes || 0,
+              installSizeStatus: cand.installSizeStatus || (cand.installedSize ? 'KNOWN' : 'UNKNOWN'),
+              installSizeSource: cand.installSizeSource || (cand.installedSize ? 'metadata' : 'unknown'),
+              installSizeUpdatedAt: (cand.installedSize || cand.installSizeBytes) ? new Date().toISOString() : undefined,
               isInstalled: true,
               isManual: false,
               totalPlayTime: cand.totalPlayTime || 0,
@@ -446,19 +472,31 @@ export class GameScanner {
         foundCount: totalFoundCandidates,
       });
 
-      for (const game of existingGames) {
+      const allCurrentGames = this.gameRepo.getAll();
+      for (const game of allCurrentGames) {
         const gameDrive = (game.drive || (game.installPath ? game.installPath.slice(0, 2) : 'C:')).toUpperCase();
         // If the drive is currently connected to the PC:
         if (availableLetters.has(gameDrive)) {
           let exists = false;
-          if (game.launcher === 'XBOX' && game.launcherAppId && game.launcherAppId.includes('!')) {
-            // Xbox Store AUMID apps reside in ACL-protected WindowsApps folders
-            exists = true;
-          } else {
-            if (game.executablePath && fs.existsSync(game.executablePath)) {
+          if (game.executablePath) {
+            if (fs.existsSync(game.executablePath)) {
               exists = true;
-            } else if (game.installPath && fs.existsSync(game.installPath)) {
-              exists = true;
+            } else if (game.launcher === 'STEAM' && game.launcherAppId && game.installPath) {
+              const steamappsDir = path.resolve(game.installPath, '..', '..');
+              const acfPath = path.join(steamappsDir, `appmanifest_${game.launcherAppId}.acf`);
+              if (fs.existsSync(acfPath)) {
+                exists = true;
+              }
+            }
+          } else if (game.installPath) {
+            if (fs.existsSync(game.installPath)) {
+              try {
+                const files = fs.readdirSync(game.installPath);
+                exists = files.length > 0;
+              } catch {
+                // Inaccessible folder (e.g. protected WindowsApps) - if it exists on disk, treat as installed
+                exists = true;
+              }
             }
           }
 

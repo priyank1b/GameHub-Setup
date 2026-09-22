@@ -10,6 +10,7 @@ interface GameGridProps {
   onFocusGame?: (game: Game) => void;
   onLocate?: (game: Game) => void;
   onRemove?: (game: Game) => void;
+  onHide?: (game: Game) => void;
   className?: string;
 }
 
@@ -21,6 +22,7 @@ export const GameGrid: React.FC<GameGridProps> = ({
   onFocusGame,
   onLocate,
   onRemove,
+  onHide,
   className = '',
 }) => {
   return (
@@ -38,6 +40,7 @@ export const GameGrid: React.FC<GameGridProps> = ({
           onFocus={onFocusGame}
           onLocate={onLocate}
           onRemove={onRemove}
+          onHide={onHide}
         />
       ))}
     </div>

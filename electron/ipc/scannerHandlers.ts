@@ -8,6 +8,8 @@ import { GogDetector } from '../services/detectors/GogDetector';
 import { XboxDetector } from '../services/detectors/XboxDetector';
 import { UbisoftDetector } from '../services/detectors/UbisoftDetector';
 import { GameScanner } from '../services/scanner/GameScanner';
+import { StorageResolver } from '../services/scanner/StorageResolver';
+import { AutoRescanService } from '../services/scanner/AutoRescanService';
 import { GameCandidate, ScanProgress, ScanResult } from '../services/scanner/types';
 import path from 'path';
 
@@ -15,8 +17,12 @@ export function registerScannerHandlers(
   gameRepo: GameRepository,
   settingsRepo: SettingsRepository,
   driveService: DriveService
-): void {
+): { autoRescanService: AutoRescanService; storageResolver: StorageResolver } {
   const gameScanner = new GameScanner(gameRepo, settingsRepo, driveService);
+  const storageResolver = new StorageResolver(gameRepo);
+  const autoRescanService = new AutoRescanService(gameScanner, settingsRepo);
+  autoRescanService.initialize();
+
   const steamDetector = new SteamDetector(driveService);
   const epicDetector = new EpicDetector(driveService);
   const gogDetector = new GogDetector(driveService);
@@ -51,7 +57,21 @@ export function registerScannerHandlers(
     'scanner:start',
     async (_event, customLocations?: string[]): Promise<ScanResult> => {
       console.log('[IPC scanner:start] Starting unified scan pipeline...');
-      return gameScanner.scan(customLocations);
+      if (gameScanner.isRunning()) {
+        console.log('[IPC scanner:start] Scan already actively running. Returning gracefully.');
+        return {
+          status: 'complete',
+          scannedLocationsCount: 0,
+          totalFoundCandidates: 0,
+          newGamesAdded: 0,
+          existingGamesUpdated: 0,
+          missingGamesMarked: 0,
+          durationMs: 0,
+        };
+      }
+      const result = await gameScanner.scan(customLocations);
+      autoRescanService.resetTimerFromNow();
+      return result;
     }
   );
 
@@ -69,7 +89,15 @@ export function registerScannerHandlers(
   // games:scan alias pointing to GameScanner engine
   ipcMain.handle('games:scan', async (_event, customLocations?: string[]) => {
     console.log('[IPC games:scan] Executing scan via GameScanner engine...');
+    if (gameScanner.isRunning()) {
+      return {
+        status: 'complete',
+        newGamesCount: 0,
+        totalFound: 0,
+      };
+    }
     const result = await gameScanner.scan(customLocations);
+    autoRescanService.resetTimerFromNow();
     return {
       status: result.status,
       newGamesCount: result.newGamesAdded,
@@ -137,6 +165,9 @@ export function registerScannerHandlers(
           isInstalled: true,
           isManual: false,
           installedSize: candidate.installedSize || 0,
+          installSizeBytes: candidate.installSizeBytes ?? candidate.installedSize,
+          installSizeStatus: candidate.installSizeStatus,
+          installSizeSource: candidate.installSizeSource,
           drive: candidate.drive || candidate.installPath.slice(0, 2).toUpperCase(),
         });
 
@@ -148,4 +179,50 @@ export function registerScannerHandlers(
       }
     }
   );
+
+  // Storage Resolution IPC
+  ipcMain.handle('storage:resolveSize', async (_event, gameId: number, force?: boolean) => {
+    try {
+      const game = gameRepo.getById(gameId);
+      if (!game) return { success: false, error: 'Game not found' };
+      const info = await storageResolver.resolveGameStorage(game, force);
+      return { success: true, info };
+    } catch (err: any) {
+      console.error(`[IPC storage:resolveSize] Error for game ${gameId}:`, err.message);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('storage:resolveAll', async (_event, refresh?: boolean) => {
+    try {
+      // Run asynchronously in background without blocking IPC caller
+      storageResolver.resolveAll(refresh).catch((err) => {
+        console.error('[IPC storage:resolveAll] Background error:', err.message);
+      });
+      return { success: true, message: 'Storage calculation started in background.' };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Auto-Rescan IPC
+  ipcMain.handle('scanner:getAutoRescanStatus', async () => {
+    return autoRescanService.getStatus();
+  });
+
+  ipcMain.handle(
+    'scanner:setAutoRescan',
+    async (_event, enabled: boolean, intervalMinutes?: number) => {
+      console.log(`[IPC scanner:setAutoRescan] Setting enabled=${enabled}, interval=${intervalMinutes}`);
+      return autoRescanService.setConfig(enabled, intervalMinutes);
+    }
+  );
+
+  ipcMain.handle('scanner:triggerAutoRescan', async () => {
+    console.log('[IPC scanner:triggerAutoRescan] Manual trigger of auto-rescan cycle...');
+    const result = await autoRescanService.executeScheduledScan();
+    return { success: true, result };
+  });
+
+  return { autoRescanService, storageResolver };
 }

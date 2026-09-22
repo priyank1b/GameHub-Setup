@@ -17,6 +17,7 @@ interface LibraryProps {
   onFocusGame?: (game: Game) => void;
   onLocate?: (game: Game) => void;
   onRemove?: (game: Game) => void;
+  onHide?: (game: Game) => void;
 }
 
 export const Library: React.FC<LibraryProps> = ({
@@ -30,6 +31,7 @@ export const Library: React.FC<LibraryProps> = ({
   onFocusGame,
   onLocate,
   onRemove,
+  onHide,
 }) => {
   const [sortBy, setSortBy] = React.useState<SortOption>('name-asc');
 
@@ -74,7 +76,10 @@ export const Library: React.FC<LibraryProps> = ({
           case 'playtime':
             return b.totalPlayTime - a.totalPlayTime;
           case 'size':
-            return (b.installedSize || 0) - (a.installedSize || 0);
+            return (
+              (b.installSizeBytes ?? b.installedSize ?? 0) -
+              (a.installSizeBytes ?? a.installedSize ?? 0)
+            );
           default:
             return 0;
         }
@@ -108,7 +113,7 @@ export const Library: React.FC<LibraryProps> = ({
   if (missingGamesCount > 0) {
     filterTabs.push({
       id: 'MISSING',
-      label: 'Missing',
+      label: 'Missing / Moved',
       count: missingGamesCount,
     });
   }
@@ -210,6 +215,7 @@ export const Library: React.FC<LibraryProps> = ({
           onFocusGame={onFocusGame}
           onLocate={onLocate}
           onRemove={onRemove}
+          onHide={onHide}
         />
       ) : (
         <EmptyState

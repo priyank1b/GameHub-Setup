@@ -9,6 +9,7 @@ import { Drives } from './pages/Drives';
 import { Settings } from './pages/Settings';
 import { AddGameModal } from './components/AddGameModal';
 import { GameDetailsModal } from './components/GameDetailsModal';
+import { ConfirmModal, ConfirmModalType } from './components/ConfirmModal';
 import { Game } from './types/Game';
 import { PageRoute, LibraryFilter } from './types/Navigation';
 import { useNavigation } from './context/NavigationContext';
@@ -23,8 +24,48 @@ export const App: React.FC = () => {
   const [focusedGame, setFocusedGame] = useState<Game | null>(null);
   const [isDbLoaded, setIsDbLoaded] = useState<boolean>(false);
   const [isScanning, setIsScanning] = useState<boolean>(false);
+  const isScanningRef = useRef<boolean>(false);
+  const isLocatingRef = useRef<boolean>(false);
   const [launchMessage, setLaunchMessage] = useState<string | null>(null);
   const [isAddGameOpen, setIsAddGameOpen] = useState<boolean>(false);
+
+  // Custom UI alert & confirm dialog state
+  const [confirmModalState, setConfirmModalState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    subMessage?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    type?: ConfirmModalType;
+    icon?: 'trash' | 'eye-off' | 'alert' | 'info';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  // Intercept window.alert so all popups match our custom sleek dark theme
+  useEffect(() => {
+    const originalAlert = window.alert;
+    window.alert = (msg?: any) => {
+      setConfirmModalState({
+        isOpen: true,
+        title: 'Alert',
+        message: String(msg ?? ''),
+        confirmLabel: 'OK',
+        cancelLabel: 'Dismiss',
+        type: 'info',
+        icon: 'info',
+        onConfirm: () => setConfirmModalState((prev) => ({ ...prev, isOpen: false })),
+      });
+    };
+    return () => {
+      window.alert = originalAlert;
+    };
+  }, []);
 
   const { setOnTabChange } = useNavigation();
 
@@ -86,21 +127,43 @@ export const App: React.FC = () => {
           progress.stage === 'deduplicating' ||
           progress.stage === 'database_sync'
         ) {
+          isScanningRef.current = true;
           setIsScanning(true);
           setLaunchMessage(`[${progress.percent}%] ${progress.message}`);
         } else if (progress.stage === 'complete') {
+          isScanningRef.current = false;
           setIsScanning(false);
+          loadGames();
           setLaunchMessage(progress.message);
           setTimeout(() => setLaunchMessage(null), 4000);
-        } else if (progress.stage === 'cancelled') {
+        } else if (progress.stage === 'cancelled' || progress.stage === 'error') {
+          isScanningRef.current = false;
           setIsScanning(false);
-          setLaunchMessage('Scan was cancelled.');
+          setLaunchMessage(progress.stage === 'cancelled' ? 'Scan was cancelled.' : progress.message);
           setTimeout(() => setLaunchMessage(null), 3000);
         }
       });
       return unsubscribe;
     }
-  }, []);
+  }, [loadGames]);
+
+  // Listen for auto-rescan discoveries or missing games updates to refresh library reactively
+  useEffect(() => {
+    if (window.gameHub?.scanner?.onNewGamesDiscovered) {
+      const unsubscribe = window.gameHub.scanner.onNewGamesDiscovered((data: any) => {
+        console.log('[App] Auto-rescan update received:', data);
+        loadGames();
+        if (data?.count > 0) {
+          setLaunchMessage(`Auto-rescan: ${data.count} new game(s) discovered!`);
+          setTimeout(() => setLaunchMessage(null), 4000);
+        } else if (data?.missingCount && data.missingCount > 0) {
+          setLaunchMessage(`Auto-rescan: ${data.missingCount} missing game(s) updated.`);
+          setTimeout(() => setLaunchMessage(null), 4000);
+        }
+      });
+      return unsubscribe;
+    }
+  }, [loadGames]);
 
   // Listen for window restoration from system tray to ensure UI responsiveness
   useEffect(() => {
@@ -134,24 +197,19 @@ export const App: React.FC = () => {
   };
 
   const handleLocateGame = async (game: Game) => {
-    if (!window.gameHub) return;
+    if (!window.gameHub || isLocatingRef.current) return;
+    isLocatingRef.current = true;
 
     try {
-      let chosenPath: string | null = null;
-      if (window.gameHub.dialog?.selectExecutable) {
-        const fileRes = await window.gameHub.dialog.selectExecutable();
-        if (fileRes?.filePath) {
-          chosenPath = fileRes.filePath;
-        }
+      if (!window.gameHub.dialog?.selectExecutable) return;
+
+      const fileRes = await window.gameHub.dialog.selectExecutable();
+      if (!fileRes?.filePath) {
+        // User closed or cancelled the dialog - return cleanly without opening a second window
+        return;
       }
 
-      if (!chosenPath && window.gameHub.dialog?.selectFolder) {
-        chosenPath = await window.gameHub.dialog.selectFolder();
-      }
-
-      if (!chosenPath) return; // User cancelled
-
-      const res = await window.gameHub.games.locate(game.id, chosenPath);
+      const res = await window.gameHub.games.locate(game.id, fileRes.filePath);
       if (res.success && res.game) {
         const updatedGame = res.game;
         setGames((prev) => prev.map((g) => (g.id === game.id ? updatedGame : g)));
@@ -168,32 +226,73 @@ export const App: React.FC = () => {
       console.error('[App] Locate game error:', err.message);
       setLaunchMessage(`Locate error: ${err.message}`);
       setTimeout(() => setLaunchMessage(null), 4000);
+    } finally {
+      isLocatingRef.current = false;
     }
   };
 
-  const handleRemoveGame = async (game: Game) => {
+  const handleRemoveGame = (game: Game) => {
     if (!window.gameHub) return;
 
-    const confirmed = window.confirm(
-      `Are you sure you want to remove "${game.name}" from your library?\n\nThis will remove it from the launcher, but will NOT delete any game files on disk.`
-    );
-    if (!confirmed) return;
-
-    try {
-      const removed = await window.gameHub.games.remove(game.id);
-      if (removed) {
-        setGames((prev) => prev.filter((g) => g.id !== game.id));
-        if (selectedGame?.id === game.id) {
-          setSelectedGame(null);
+    setConfirmModalState({
+      isOpen: true,
+      title: 'Remove from Library',
+      message: `Are you sure you want to remove "${game.name}" from your library?`,
+      subMessage: 'This will remove the game record from your launcher, but will NOT delete any actual game files or save data from your disk.',
+      confirmLabel: 'Remove Game',
+      cancelLabel: 'Cancel',
+      type: 'danger',
+      icon: 'trash',
+      onConfirm: async () => {
+        setConfirmModalState((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const removed = await window.gameHub.games.remove(game.id);
+          if (removed) {
+            setGames((prev) => prev.filter((g) => g.id !== game.id));
+            if (selectedGame?.id === game.id) {
+              setSelectedGame(null);
+            }
+            setLaunchMessage(`"${game.name}" removed from library.`);
+            setTimeout(() => setLaunchMessage(null), 3000);
+          }
+        } catch (err: any) {
+          console.error('[App] Remove game error:', err.message);
+          setLaunchMessage(`Failed to remove: ${err.message}`);
+          setTimeout(() => setLaunchMessage(null), 3000);
         }
-        setLaunchMessage(`"${game.name}" removed from library.`);
-        setTimeout(() => setLaunchMessage(null), 3000);
-      }
-    } catch (err: any) {
-      console.error('[App] Remove game error:', err.message);
-      setLaunchMessage(`Failed to remove: ${err.message}`);
-      setTimeout(() => setLaunchMessage(null), 3000);
-    }
+      },
+    });
+  };
+
+  const handleHideGame = (game: Game) => {
+    setConfirmModalState({
+      isOpen: true,
+      title: `Hide "${game.name}"?`,
+      message: `Are you sure you want to hide this game from your library?`,
+      subMessage: `It will be removed from your library and excluded from future automatic and manual rescans.\n\nYou can restore it at any time in Settings > Library & Folders > Hidden & Excluded Games.`,
+      confirmLabel: 'Hide Game',
+      cancelLabel: 'Cancel',
+      type: 'warning',
+      icon: 'eye-off',
+      onConfirm: async () => {
+        setConfirmModalState((prev) => ({ ...prev, isOpen: false }));
+        try {
+          if (window.gameHub?.games?.hide) {
+            await window.gameHub.games.hide(game.id);
+          }
+          setGames((prev) => prev.filter((g) => g.id !== game.id));
+          if (selectedGame?.id === game.id) {
+            setSelectedGame(null);
+          }
+          setLaunchMessage(`"${game.name}" hidden and excluded from future rescans.`);
+          setTimeout(() => setLaunchMessage(null), 3500);
+        } catch (err: any) {
+          console.error('[App] Hide game error:', err.message);
+          setLaunchMessage(`Failed to hide: ${err.message}`);
+          setTimeout(() => setLaunchMessage(null), 3000);
+        }
+      },
+    });
   };
 
   const handleLaunch = async (game: Game) => {
@@ -269,11 +368,18 @@ export const App: React.FC = () => {
   };
 
   const handleRescan = async () => {
+    // Prevent multiple rapid clicks or starting manual scan during auto-scan
+    if (isScanningRef.current || isScanning) {
+      console.log('[App] Rescan ignored: scan already actively in progress.');
+      return;
+    }
+
+    isScanningRef.current = true;
     setIsScanning(true);
     setLaunchMessage('Initializing GameScanner pipeline...');
 
-    if (window.gameHub?.scanner) {
-      try {
+    try {
+      if (window.gameHub?.scanner) {
         const scanRes = await window.gameHub.scanner.start();
         const refreshed = await window.gameHub.games.getAll();
         setGames(refreshed);
@@ -282,12 +388,7 @@ export const App: React.FC = () => {
             ? `Scan finished: Discovered and indexed ${scanRes.newGamesAdded} new game(s)!`
             : 'Scan complete. Library is up to date.'
         );
-      } catch (err: any) {
-        console.error('[App] Scanner error:', err.message);
-        setLaunchMessage('Scan encountered an error: ' + err.message);
-      }
-    } else if (window.gameHub?.games) {
-      try {
+      } else if (window.gameHub?.games) {
         const scanRes = await window.gameHub.games.scan();
         const refreshed = await window.gameHub.games.getAll();
         setGames(refreshed);
@@ -296,20 +397,21 @@ export const App: React.FC = () => {
             ? `Scan finished: Added ${scanRes.newGamesCount} game(s)!`
             : 'Scan complete. Library is up to date.'
         );
-      } catch (err: any) {
-        console.error('[App] Rescan IPC error:', err.message);
-        setLaunchMessage('Scan error: ' + err.message);
+      } else {
+        setTimeout(() => {
+          setLaunchMessage('Scan complete. Library is up to date.');
+        }, 1200);
       }
-    } else {
+    } catch (err: any) {
+      console.error('[App] Scanner error:', err.message);
+      setLaunchMessage('Scan encountered an error: ' + err.message);
+    } finally {
+      isScanningRef.current = false;
+      setIsScanning(false);
       setTimeout(() => {
-        setLaunchMessage('Scan complete. Library is up to date.');
-      }, 1200);
+        setLaunchMessage(null);
+      }, 4000);
     }
-
-    setIsScanning(false);
-    setTimeout(() => {
-      setLaunchMessage(null);
-    }, 4000);
   };
 
   // Listen to System Tray events (e.g. Rescan, Recently Played navigation)
@@ -549,6 +651,7 @@ export const App: React.FC = () => {
               onFocusGame={setFocusedGame}
               onLocate={handleLocateGame}
               onRemove={handleRemoveGame}
+              onHide={handleHideGame}
             />
           )}
 
@@ -567,6 +670,7 @@ export const App: React.FC = () => {
               onFocusGame={setFocusedGame}
               onLocate={handleLocateGame}
               onRemove={handleRemoveGame}
+              onHide={handleHideGame}
             />
           )}
 
@@ -579,6 +683,7 @@ export const App: React.FC = () => {
               onSelectGame={setSelectedGame}
               onLocate={handleLocateGame}
               onRemove={handleRemoveGame}
+              onHide={handleHideGame}
             />
           )}
 
@@ -587,6 +692,8 @@ export const App: React.FC = () => {
               games={games}
               onLaunch={handleLaunch}
               onNavigate={handleNavigate}
+              onLocate={handleLocateGame}
+              onSelectGame={setSelectedGame}
             />
           )}
 
@@ -612,6 +719,21 @@ export const App: React.FC = () => {
         onUpdateGame={handleUpdateGame}
         onLocate={handleLocateGame}
         onRemove={handleRemoveGame}
+        onHide={handleHideGame}
+      />
+
+      {/* Sleek Dark-Themed Alert & Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModalState.isOpen}
+        title={confirmModalState.title}
+        message={confirmModalState.message}
+        subMessage={confirmModalState.subMessage}
+        confirmLabel={confirmModalState.confirmLabel}
+        cancelLabel={confirmModalState.cancelLabel}
+        type={confirmModalState.type}
+        icon={confirmModalState.icon}
+        onConfirm={confirmModalState.onConfirm}
+        onCancel={() => setConfirmModalState((prev) => ({ ...prev, isOpen: false }))}
       />
     </div>
   );

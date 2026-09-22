@@ -18,6 +18,7 @@ import {
   Image as ImageIcon,
   Save,
   RotateCcw,
+  EyeOff,
 } from 'lucide-react';
 import { LauncherBadge } from './LauncherBadge';
 import { formatImageUrl } from '../utils/formatImage';
@@ -32,6 +33,7 @@ interface GameDetailsModalProps {
   onUpdateGame?: (updatedGame: Game) => void;
   onLocate?: (game: Game) => void;
   onRemove?: (game: Game) => void;
+  onHide?: (game: Game) => void;
 }
 
 export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
@@ -42,6 +44,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
   onUpdateGame,
   onLocate,
   onRemove,
+  onHide,
 }) => {
   const { pushModal, popModal } = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
@@ -96,9 +99,73 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
     return `${hours} hours ${minutes} minutes`;
   };
 
-  const formatSize = (bytes?: number) => {
-    if (!bytes) return 'Unknown';
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  const [isRecalculatingSize, setIsRecalculatingSize] = useState(false);
+
+  const handleRecalculateSize = async () => {
+    if (!game || isRecalculatingSize) return;
+    setIsRecalculatingSize(true);
+    try {
+      if (window.gameHub?.storage?.resolveSize) {
+        const res = await window.gameHub.storage.resolveSize(game.id, true);
+        if (res?.success && res?.info && onUpdateGame) {
+          onUpdateGame({
+            ...game,
+            installSizeBytes: res.info.sizeBytes,
+            installedSize: res.info.sizeBytes,
+            installSizeStatus: res.info.status,
+            installSizeSource: res.info.source,
+            installSizeUpdatedAt: res.info.updatedAt,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to recalculate storage size:', err);
+    } finally {
+      setIsRecalculatingSize(false);
+    }
+  };
+
+  useEffect(() => {
+    if (game && game.installSizeStatus === 'CALCULATING') {
+      window.gameHub?.storage?.resolveSize(game.id, false).then((res) => {
+        if (res?.success && res?.info && onUpdateGame) {
+          onUpdateGame({
+            ...game,
+            installSizeBytes: res.info.sizeBytes,
+            installedSize: res.info.sizeBytes,
+            installSizeStatus: res.info.status,
+            installSizeSource: res.info.source,
+            installSizeUpdatedAt: res.info.updatedAt,
+          });
+        }
+      }).catch(() => {});
+    }
+  }, [game?.id, game?.installSizeStatus]);
+
+  const getSizeDisplay = () => {
+    if (game.installSizeStatus === 'CALCULATING' || isRecalculatingSize) {
+      return { text: 'Calculating…', color: 'text-amber-400' };
+    }
+    if (game.installSizeStatus === 'ACCESS_DENIED') {
+      return { text: 'Access denied', color: 'text-rose-400' };
+    }
+    if (game.installSizeStatus === 'UNKNOWN') {
+      return { text: 'Size unavailable', color: 'text-zinc-400' };
+    }
+    const bytes = game.installSizeBytes ?? game.installedSize;
+    if (bytes === undefined || bytes === null || bytes <= 0) {
+      if (game.installSizeStatus === 'KNOWN') {
+        return { text: '0 B', color: 'text-zinc-200' };
+      }
+      return { text: 'Size unavailable', color: 'text-zinc-400' };
+    }
+    if (bytes >= 1024 * 1024 * 1024) {
+      return { text: `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`, color: 'text-zinc-200' };
+    }
+    if (bytes >= 1024 * 1024) {
+      return { text: `${(bytes / (1024 * 1024)).toFixed(0)} MB`, color: 'text-zinc-200' };
+    }
+    return { text: `${(bytes / 1024).toFixed(0)} KB`, color: 'text-zinc-200' };
   };
 
   const formatLastPlayed = (dateString?: string | null) => {
@@ -234,7 +301,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                 {isMissing && (
                   <span className="inline-flex items-center gap-1 bg-amber-500/90 text-zinc-950 font-bold px-2 py-0.5 rounded text-[11px] tracking-wider uppercase shadow-md">
                     <AlertTriangle className="w-3.5 h-3.5 text-zinc-950" />
-                    Missing
+                    Missing / Moved
                   </span>
                 )}
                 {game.genre && (
@@ -396,6 +463,36 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                 >
                   <Edit3 className="w-4 h-4 text-teal-400" />
                   <span>{isEditing ? 'Cancel Edit' : 'Edit'}</span>
+                </button>
+              )}
+            </FocusableItem>
+
+            {/* Hide from Library & Exclude */}
+            <FocusableItem
+              id="modal-hide-btn"
+              scope="game-details-modal"
+              group="modal-actions"
+              onConfirm={() => {
+                onClose();
+                onHide?.(game);
+              }}
+              onBack={onClose}
+            >
+              {({ ref, isFocused }) => (
+                <button
+                  ref={ref}
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onHide?.(game);
+                  }}
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-300 transition-colors cursor-pointer ${
+                    isFocused ? 'controller-focus' : ''
+                  }`}
+                  title="Hide game and exclude from future rescans"
+                >
+                  <EyeOff className="w-4 h-4 text-zinc-400" />
+                  <span>Hide</span>
                 </button>
               )}
             </FocusableItem>
@@ -643,10 +740,44 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                     </span>
                   </div>
                   <div>
-                    <span className="text-zinc-500 block mb-0.5">Installed Size</span>
-                    <span className="text-zinc-200 font-mono font-medium">
-                      {formatSize(game.installedSize)}
-                    </span>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-zinc-500">Installed Size</span>
+                      <button
+                        type="button"
+                        onClick={handleRecalculateSize}
+                        disabled={isRecalculatingSize || game.installSizeStatus === 'CALCULATING'}
+                        className="text-zinc-500 hover:text-teal-400 transition-colors p-0.5 rounded cursor-pointer disabled:opacity-50"
+                        title={
+                          game.installSizeUpdatedAt
+                            ? `Last updated: ${new Date(game.installSizeUpdatedAt).toLocaleTimeString()} (Click to refresh)`
+                            : 'Click to calculate/refresh storage size'
+                        }
+                      >
+                        <RotateCcw className={`w-3 h-3 ${isRecalculatingSize ? 'animate-spin text-teal-400' : ''}`} />
+                      </button>
+                    </div>
+                    {(() => {
+                      const sizeInfo = getSizeDisplay();
+                      return (
+                        <>
+                          <span
+                            className={`font-mono font-medium ${sizeInfo.color}`}
+                            title={
+                              game.installSizeUpdatedAt
+                                ? `Source: ${game.installSizeSource || 'unknown'} | Checked: ${new Date(game.installSizeUpdatedAt).toLocaleString()}`
+                                : undefined
+                            }
+                          >
+                            {sizeInfo.text}
+                          </span>
+                          {game.installSizeSource && game.installSizeSource !== 'unknown' && (
+                            <span className="text-[10px] text-zinc-500 block truncate">
+                              via {game.installSizeSource}
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   <div>
                     <span className="text-zinc-500 block mb-0.5">Drive</span>
