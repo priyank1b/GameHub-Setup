@@ -4,7 +4,7 @@ const fs = require('fs');
 
 app.whenReady().then(async () => {
   try {
-    const srcJpg = 'C:/Users/priyank/.gemini/antigravity-ide/brain/4bb9e622-aaca-43ea-a076-403ddbe03408/gamehub_clean_icon_1789838545339.jpg';
+    const srcJpg = process.env.ICON_SOURCE || path.join(__dirname, '..', 'assets', 'icon.png');
     console.log('Reading source image from:', srcJpg);
 
     const baseImage = nativeImage.createFromPath(srcJpg);
