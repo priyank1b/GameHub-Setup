@@ -20,21 +20,50 @@ import {
   XCircle,
   Eye,
   EyeOff,
+  Key,
+  ShieldCheck,
+  BookOpen,
+  Info,
+  Clock,
+  HelpCircle,
 } from 'lucide-react';
 import { APP_CONFIG } from '../config/appConfig';
 import { WindowsDrive } from '../types/Drive';
 import { Game } from '../types/Game';
+import { PageRoute } from '../types/Navigation';
 import { formatImageUrl } from '../utils/formatImage';
 import { useNavigation } from '../context/NavigationContext';
 import { FocusableItem } from '../components/FocusableItem';
 
 interface SettingsProps {
   onLibraryUpdated?: () => void;
+  onNavigate?: (page: PageRoute) => void;
+  games?: Game[];
 }
 
-export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
+export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate, games = [] }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'library' | 'appearance' | 'advanced' | 'controller'>('general');
   const { controllerInfo, isControllerEnabled, setControllerEnabled } = useNavigation();
+
+  // Computed Library & Storage Stats (Moved from Home)
+  const installedGames = games.filter((g) => g.isInstalled);
+  const missingGamesCount = games.length - installedGames.length;
+
+  const totalPlaySeconds = games.reduce((acc, g) => acc + (g.totalPlayTime || 0), 0);
+  const playTimeDisplay =
+    totalPlaySeconds >= 3600
+      ? `${(totalPlaySeconds / 3600).toFixed(1)} hrs`
+      : totalPlaySeconds > 0
+      ? `${Math.ceil(totalPlaySeconds / 60)} mins`
+      : '0 hrs';
+
+  const totalSizeBytes = games.reduce((acc, g) => acc + (g.installSizeBytes ?? g.installedSize ?? 0), 0);
+  const totalStorageDisplay =
+    totalSizeBytes >= 1024 * 1024 * 1024 * 1024
+      ? `${(totalSizeBytes / (1024 * 1024 * 1024 * 1024)).toFixed(2)} TB`
+      : totalSizeBytes > 0
+      ? `${(totalSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+      : '0 GB';
 
   // General settings state
   const [startWithWindows, setStartWithWindows] = useState(false);
@@ -67,6 +96,10 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
 
   // Available drives state
   const [settingsDrives, setSettingsDrives] = useState<WindowsDrive[]>([]);
+
+  // Steam Web API Key state for remote family sharing
+  const [steamApiKey, setSteamApiKey] = useState('');
+  const [steamApiKeySaved, setSteamApiKeySaved] = useState(false);
 
   useEffect(() => {
     async function loadSettingsDrives() {
@@ -107,6 +140,10 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
           const savedTray = await window.gameHub.settings.get<boolean>('minimize_to_tray', true);
           if (typeof savedTray === 'boolean') {
             setMinimizeToTray(savedTray);
+          }
+          const savedSteamKey = await window.gameHub.settings.get<string>('steam_web_api_key', '');
+          if (savedSteamKey) {
+            setSteamApiKey(savedSteamKey);
           }
         } catch {}
       }
@@ -239,6 +276,14 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
     }
   };
 
+  const handleSaveSteamApiKey = async () => {
+    if (window.gameHub?.settings) {
+      await window.gameHub.settings.set('steam_web_api_key', steamApiKey.trim());
+      setSteamApiKeySaved(true);
+      setTimeout(() => setSteamApiKeySaved(false), 3000);
+    }
+  };
+
   const handleChangeAutoRescanInterval = async (interval: number) => {
     setAutoRescanInterval(interval);
     if (window.gameHub?.scanner?.setAutoRescan) {
@@ -317,7 +362,7 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
           { id: 'general', label: 'General' },
           { id: 'library', label: 'Library & Folders' },
           { id: 'appearance', label: 'Appearance' },
-          { id: 'advanced', label: 'Advanced & Database' },
+          { id: 'advanced', label: 'Storage & Backup' },
           { id: 'controller', label: 'Controller' },
         ].map((tab) => (
           <FocusableItem
@@ -738,6 +783,156 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
                 </div>
               )}
             </div>
+
+            {/* Steam Integration & Remote Family Sharing (Optional API Key) */}
+            <div className="p-6 rounded-2xl bg-surface-850 border border-zinc-800 space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h3 className="font-bold text-base text-zinc-100 flex items-center gap-2">
+                    <Key className="w-4 h-4 text-amber-400" />
+                    Steam Integration & Remote Family Sharing
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Optional Steam Web API key. Local accounts and installed family shared games work automatically with zero setup. Entering an API key allows fetching uninstalled games from remote friends whose accounts haven&apos;t logged into this PC.
+                  </p>
+                </div>
+              </div>
+
+              {/* Use Case Explanation */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
+                  <span className="font-bold text-emerald-400 flex items-center gap-1.5 font-mono text-[11px] uppercase">
+                    <span>✓</span> No API Key Needed
+                  </span>
+                  <p className="text-zinc-400 text-[11px]">
+                    Installed games, local Steam accounts, and installed family-shared titles are detected 100% offline from your local disk without any API key or login.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1">
+                  <span className="font-bold text-amber-400 flex items-center gap-1.5 font-mono text-[11px] uppercase">
+                    <span>ℹ</span> When You Need a Key
+                  </span>
+                  <p className="text-zinc-400 text-[11px]">
+                    Only needed if you want to discover <strong>uninstalled games</strong> from remote friends who shared their library with you online but have never logged into your PC.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 space-y-3">
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <div className="relative flex-1">
+                    <input
+                      type="password"
+                      placeholder="Paste Steam Web API Key (32 characters)"
+                      value={steamApiKey}
+                      onChange={(e) => setSteamApiKey(e.target.value)}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2 text-xs text-zinc-100 font-mono placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveSteamApiKey}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs shadow-md shadow-amber-500/10 transition-all cursor-pointer"
+                  >
+                    {steamApiKeySaved ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-zinc-950" />
+                        <span>Saved</span>
+                      </>
+                    ) : (
+                      <span>Save Key</span>
+                    )}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] text-zinc-500">
+                  <span>
+                    Don&apos;t have a key? You can generate one for free from Valve.
+                  </span>
+                  <a
+                    href="https://steamcommunity.com/dev/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (window.gameHub?.openExternal) {
+                        window.gameHub.openExternal('https://steamcommunity.com/dev/apikey');
+                      } else {
+                        window.open('https://steamcommunity.com/dev/apikey', '_blank');
+                      }
+                    }}
+                    className="text-amber-400 hover:text-amber-300 underline font-mono cursor-pointer"
+                    title="Opens safely in your default web browser (Chrome, Edge, etc.)"
+                  >
+                    Get Steam Web API Key ↗
+                  </a>
+                </div>
+
+                {/* Important Domain Name Instruction */}
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-amber-300 font-bold font-mono text-[11px] uppercase">
+                    <Info className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Important: What to enter for &quot;Domain Name&quot; on Valve&apos;s site:</span>
+                  </div>
+                  <p className="text-zinc-300 text-[11px]">
+                    When Valve asks for <strong>&quot;Domain Name&quot;</strong>, simply enter: <code className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-700 text-amber-300 font-mono font-bold">localhost</code> (or <code className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-700 text-amber-300 font-mono">local</code>).
+                  </p>
+                  <p className="text-zinc-500 text-[10px]">
+                    Valve requires this field for web developers, but for personal library fetching, entering <code className="text-zinc-400 font-mono">localhost</code> is standard practice and has zero negative impact.
+                  </p>
+                </div>
+
+                {/* Security & Trust Guarantee */}
+                <div className="p-3.5 rounded-xl bg-surface-900/90 border border-zinc-800 text-xs text-zinc-400 space-y-2 mt-2">
+                  <div className="flex items-center gap-2 text-emerald-400 font-semibold text-[11px] uppercase tracking-wider font-mono">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span>Privacy &amp; Trust Guarantee</span>
+                  </div>
+                  <ul className="space-y-1.5 text-[11px] text-zinc-400">
+                    <li className="flex items-start gap-2">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>
+                        <strong className="text-zinc-200">Zero Passwords Requested:</strong> GameHub never asks for, captures, or stores your Steam password or Steam Guard codes.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>
+                        <strong className="text-zinc-200">Native Browser Isolation:</strong> Official Valve links open directly in your trusted default browser (Chrome / Edge / Firefox) at <span className="text-zinc-300 font-mono">https://steamcommunity.com</span>. GameHub cannot see or access your browser session.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>
+                        <strong className="text-zinc-200">Read-Only API Scope:</strong> Steam Web API keys are strictly read-only for public library lists. They cannot make purchases, trade items, or modify your account.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span>
+                        <strong className="text-zinc-200">100% Offline &amp; Local:</strong> Installed games and local accounts are detected directly from your disk without requiring any API key or login.
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Direct link to Documentation */}
+                {onNavigate && (
+                  <div className="flex items-center justify-between pt-1 text-[11px] text-zinc-500">
+                    <span>Need full illustrated step-by-step guidance?</span>
+                    <button
+                      type="button"
+                      onClick={() => onNavigate('help')}
+                      className="text-teal-400 hover:text-teal-300 font-medium inline-flex items-center gap-1 hover:underline cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>View Steam Guide in Help &amp; Documentation →</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -773,209 +968,350 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated }) => {
         </div>
       )}
 
-      {/* Tab: Advanced */}
+      {/* Tab: Advanced / Storage & Backup */}
       {activeTab === 'advanced' && (
-        <div className="p-6 rounded-2xl bg-surface-850 border border-zinc-800 space-y-5">
-          <h3 className="font-bold text-base text-zinc-100 flex items-center gap-2">
-            <Database className="w-4 h-4 text-teal-400" />
-            Database & Maintenance
-          </h3>
-
-          {/* Action Feedback Banner */}
-          {backupStatus && (
-            <div
-              className={`p-3 rounded-xl text-xs flex items-center justify-between gap-2 border ${
-                backupStatus.type === 'success'
-                  ? 'bg-teal-500/10 border-teal-500/30 text-teal-300'
-                  : backupStatus.type === 'error'
-                  ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-300'
-              }`}
-            >
-              <span>{backupStatus.message}</span>
+        <div className="space-y-6">
+          {/* Header & Subtitle */}
+          <div className="p-6 rounded-2xl bg-surface-850 border border-zinc-800 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
+              <div>
+                <h3 className="font-bold text-lg text-zinc-100 flex items-center gap-2">
+                  <Database className="w-5 h-5 text-teal-400" />
+                  Storage, Database &amp; Library Health
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1">
+                  System storage footprint, portable library backups, and diagnostic maintenance utilities.
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => setBackupStatus(null)}
-                className="text-zinc-500 hover:text-zinc-300 text-xs px-1 cursor-pointer"
+                onClick={() => onNavigate?.('help')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border border-teal-500/20 text-xs font-semibold transition-all self-start sm:self-auto cursor-pointer"
               >
-                ✕
+                <HelpCircle className="w-4 h-4" />
+                <span>Help &amp; Documentation</span>
               </button>
             </div>
-          )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* 1. Export Library Backup */}
-            <button
-              type="button"
-              disabled={isExporting}
-              onClick={async () => {
-                if (!window.gameHub?.backup?.export) {
-                  setBackupStatus({ type: 'error', message: 'Library export is only available in desktop mode.' });
-                  return;
-                }
-                setIsExporting(true);
-                setBackupStatus(null);
-                try {
-                  const res = await window.gameHub.backup.export();
-                  if (res.success) {
-                    setBackupStatus({
-                      type: 'success',
-                      message: `Backup created successfully! ${res.gamesCount} games exported to: ${res.filePath}`,
-                    });
-                  } else if (!res.cancelled) {
-                    setBackupStatus({ type: 'error', message: res.error || 'Failed to export backup.' });
-                  }
-                } catch (err: any) {
-                  setBackupStatus({ type: 'error', message: err.message });
-                } finally {
-                  setIsExporting(false);
-                }
-              }}
-              className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer disabled:opacity-50"
-            >
-              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
-                <Download className="w-4 h-4 text-teal-400" />
-                <span>{isExporting ? 'Exporting Backup...' : 'Export Library Backup'}</span>
+            {/* Quick Overview Stats Row (Moved from Home) */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                System Storage &amp; Library Overview
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Installed Games */}
+                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center gap-3.5">
+                  <div className="p-2.5 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                    <Gamepad2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">Installed Games</p>
+                    <div className="flex items-baseline gap-1.5">
+                      <p className="text-xl font-bold text-white font-['Outfit']">{installedGames.length}</p>
+                      {missingGamesCount > 0 && (
+                        <span className="text-[10px] font-medium text-amber-400 font-mono">
+                          ({missingGamesCount} missing)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Total Playtime */}
+                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center gap-3.5">
+                  <div className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">Total Playtime</p>
+                    <p className="text-xl font-bold text-white font-['Outfit']">{playTimeDisplay}</p>
+                  </div>
+                </div>
+
+                {/* Storage Utilized */}
+                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center gap-3.5">
+                  <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">Storage Utilized</p>
+                    <p className="text-xl font-bold text-white font-['Outfit']">{totalStorageDisplay}</p>
+                  </div>
+                </div>
+
+                {/* Drives Detected */}
+                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center gap-3.5">
+                  <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <HardDrive className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">Drives Detected</p>
+                    <p className="text-xl font-bold text-white font-['Outfit']">{settingsDrives.length || 1} Drives Active</p>
+                  </div>
+                </div>
               </div>
-              <p className="text-[11px] text-zinc-500">Save library to gamehub-library.json</p>
-            </button>
+            </div>
 
-            {/* 2. Import Library Backup */}
-            <button
-              type="button"
-              disabled={isImporting}
-              onClick={async () => {
-                if (!window.gameHub?.backup?.import) {
-                  setBackupStatus({ type: 'error', message: 'Library import is only available in desktop mode.' });
-                  return;
-                }
-                setIsImporting(true);
-                setBackupStatus(null);
-                try {
-                  const res = await window.gameHub.backup.import();
-                  if (res.success) {
-                    setBackupStatus({
-                      type: 'success',
-                      message: `Backup imported! ${res.gamesImported} added, ${res.gamesUpdated} updated. Total library games: ${res.totalGames}.`,
-                    });
-                    onLibraryUpdated?.();
-                  } else if (!res.cancelled) {
-                    setBackupStatus({ type: 'error', message: res.error || 'Failed to import backup.' });
-                  }
-                } catch (err: any) {
-                  setBackupStatus({ type: 'error', message: err.message });
-                } finally {
-                  setIsImporting(false);
-                }
-              }}
-              className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer disabled:opacity-50"
-            >
-              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
-                <Upload className="w-4 h-4 text-indigo-400" />
-                <span>{isImporting ? 'Importing Backup...' : 'Import Library Backup'}</span>
+            {/* Why Does This Section Exist? Guide Box */}
+            <div className="p-4 rounded-xl bg-teal-500/5 border border-teal-500/20 space-y-2">
+              <div className="flex items-center gap-2 text-teal-400 font-semibold text-xs">
+                <Info className="w-4 h-4 shrink-0" />
+                <span>Why does this section exist and when would you use it?</span>
               </div>
-              <p className="text-[11px] text-zinc-500">Restore games and categories from backup</p>
-            </button>
-
-            {/* 3. Clear Artwork Cache */}
-            <button
-              type="button"
-              onClick={async () => {
-                if (window.gameHub?.settings?.clearCache) {
-                  const res = await window.gameHub.settings.clearCache();
-                  if (res.success) {
-                    setBackupStatus({ type: 'success', message: 'Artwork cache cleared successfully.' });
-                  } else {
-                    setBackupStatus({ type: 'error', message: res.error || 'Failed to clear cache.' });
-                  }
-                } else {
-                  setBackupStatus({ type: 'info', message: 'Artwork cache cleanup is ready.' });
-                }
-              }}
-              className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer"
-            >
-              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
-                <Trash2 className="w-4 h-4 text-amber-400" />
-                Clear Artwork Cache
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                During normal everyday gaming, you <strong>never need to touch these tools</strong>. GameHub automatically indexes your games, updates playtime, and manages artwork in the background. This section exists for 4 specific real-world scenarios:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-xs text-zinc-400">
+                <div className="flex items-start gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/50">
+                  <span className="text-base shrink-0">💻</span>
+                  <div>
+                    <strong className="text-zinc-200 block">Moving to a New PC / Reinstalling Windows</strong>
+                    <span>Use <em>Export Library Backup</em> to save all custom categories, tags, and playtime to a JSON file and restore it in 1 second.</span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/50">
+                  <span className="text-base shrink-0">💾</span>
+                  <div>
+                    <strong className="text-zinc-200 block">Freeing Up SSD Storage Space</strong>
+                    <span>Click <em>Clear Artwork Cache</em> to delete downloaded poster art if it grows too large on your drive.</span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/50">
+                  <span className="text-base shrink-0">⚡</span>
+                  <div>
+                    <strong className="text-zinc-200 block">After a Sudden Crash or Power Loss</strong>
+                    <span>Use <em>Repair &amp; Optimize Database</em> to fix locked SQLite indexes, recover missing games, and speed up library loading.</span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/50">
+                  <span className="text-base shrink-0">🔍</span>
+                  <div>
+                    <strong className="text-zinc-200 block">Troubleshooting Failed Launches</strong>
+                    <span>Open <em>gamehub.log</em> to see the exact error message or crash code when asking for support.</span>
+                  </div>
+                </div>
               </div>
-              <p className="text-[11px] text-zinc-500">Delete cached covers in %APPDATA%/GameHub</p>
-            </button>
+            </div>
 
-            {/* 4. View Application Logs Folder */}
-            <button
-              type="button"
-              onClick={async () => {
-                if (window.gameHub?.settings?.openLogs) {
-                  const ok = await window.gameHub.settings.openLogs();
-                  if (!ok) {
-                    setBackupStatus({ type: 'error', message: 'Could not open logs folder in Explorer.' });
-                  }
-                } else {
-                  setBackupStatus({ type: 'info', message: 'Application logs folder is available in desktop app.' });
-                }
-              }}
-              className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer"
-            >
-              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
-                <FileText className="w-4 h-4 text-emerald-400" />
-                View Logs Folder
+            {/* Action Feedback Banner */}
+            {backupStatus && (
+              <div
+                className={`p-3 rounded-xl text-xs flex items-center justify-between gap-2 border ${
+                  backupStatus.type === 'success'
+                    ? 'bg-teal-500/10 border-teal-500/30 text-teal-300'
+                    : backupStatus.type === 'error'
+                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+                }`}
+              >
+                <span>{backupStatus.message}</span>
+                <button
+                  type="button"
+                  onClick={() => setBackupStatus(null)}
+                  className="text-zinc-500 hover:text-zinc-300 text-xs px-1 cursor-pointer"
+                >
+                  ✕
+                </button>
               </div>
-              <p className="text-[11px] text-zinc-500">Open %APPDATA%/GameHub/logs in Explorer</p>
-            </button>
+            )}
 
-            {/* 5. Repair & Optimize Database (Phase 35) */}
-            <button
-              type="button"
-              onClick={async () => {
-                if (window.gameHub?.database?.repair) {
-                  try {
-                    setBackupStatus({ type: 'info', message: 'Verifying and repairing database...' });
-                    const res = await window.gameHub.database.repair();
-                    if (res.success) {
-                      setBackupStatus({ type: 'success', message: res.message });
-                      onLibraryUpdated?.();
-                    } else {
-                      setBackupStatus({ type: 'error', message: res.message });
+            {/* Sub-section 1: Library Backup & Migration */}
+            <div className="space-y-2 pt-2">
+              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                1. Library Backup &amp; Transfer
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 1. Export Library Backup */}
+                <button
+                  type="button"
+                  disabled={isExporting}
+                  onClick={async () => {
+                    if (!window.gameHub?.backup?.export) {
+                      setBackupStatus({ type: 'error', message: 'Library export is only available in desktop mode.' });
+                      return;
                     }
-                  } catch (err: any) {
-                    setBackupStatus({ type: 'error', message: err.message });
-                  }
-                } else {
-                  setBackupStatus({ type: 'info', message: 'Database recovery engine verified.' });
-                }
-              }}
-              className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer"
-            >
-              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
-                <Database className="w-4 h-4 text-cyan-400" />
-                Repair & Optimize Database
-              </div>
-              <p className="text-[11px] text-zinc-500">Run integrity check, reindex, and vacuum</p>
-            </button>
+                    setIsExporting(true);
+                    setBackupStatus(null);
+                    try {
+                      const res = await window.gameHub.backup.export();
+                      if (res.success) {
+                        setBackupStatus({
+                          type: 'success',
+                          message: `Backup created successfully! ${res.gamesCount} games exported to: ${res.filePath}`,
+                        });
+                      } else if (!res.cancelled) {
+                        setBackupStatus({ type: 'error', message: res.error || 'Failed to export backup.' });
+                      }
+                    } catch (err: any) {
+                      setBackupStatus({ type: 'error', message: err.message });
+                    } finally {
+                      setIsExporting(false);
+                    }
+                  }}
+                  className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
+                    <Download className="w-4 h-4 text-teal-400" />
+                    <span>{isExporting ? 'Exporting Backup...' : 'Export Library Backup'}</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">Save library to gamehub-library.json for safe keeping or transfer</p>
+                </button>
 
-            {/* 6. Open Live gamehub.log File (Phase 34) */}
-            <button
-              type="button"
-              onClick={async () => {
-                if (window.gameHub?.settings?.openLogFile) {
-                  const ok = await window.gameHub.settings.openLogFile();
-                  if (!ok) {
-                    setBackupStatus({ type: 'info', message: 'Log file will be created upon first recorded event.' });
-                  }
-                }
-              }}
-              className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer"
-            >
-              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
-                <FileText className="w-4 h-4 text-teal-400" />
-                Open gamehub.log
+                {/* 2. Import Library Backup */}
+                <button
+                  type="button"
+                  disabled={isImporting}
+                  onClick={async () => {
+                    if (!window.gameHub?.backup?.import) {
+                      setBackupStatus({ type: 'error', message: 'Library import is only available in desktop mode.' });
+                      return;
+                    }
+                    setIsExporting(true);
+                    setBackupStatus(null);
+                    try {
+                      const res = await window.gameHub.backup.import();
+                      if (res.success) {
+                        setBackupStatus({
+                          type: 'success',
+                          message: `Backup imported! ${res.gamesImported} added, ${res.gamesUpdated} updated. Total library games: ${res.totalGames}.`,
+                        });
+                        onLibraryUpdated?.();
+                      } else if (!res.cancelled) {
+                        setBackupStatus({ type: 'error', message: res.error || 'Failed to import backup.' });
+                      }
+                    } catch (err: any) {
+                      setBackupStatus({ type: 'error', message: err.message });
+                    } finally {
+                      setIsImporting(false);
+                    }
+                  }}
+                  className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
+                    <Upload className="w-4 h-4 text-indigo-400" />
+                    <span>{isImporting ? 'Importing Backup...' : 'Import Library Backup'}</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">Restore all custom categories, tags, and game titles from backup</p>
+                </button>
               </div>
-              <p className="text-[11px] text-zinc-500">View live diagnostic event log file</p>
-            </button>
-          </div>
+            </div>
 
-          <div className="pt-4 border-t border-zinc-800 text-xs text-zinc-500 flex items-center justify-between">
-            <span>{APP_CONFIG.name} v{APP_CONFIG.version}</span>
+            {/* Sub-section 2: Storage Cleanup & Maintenance */}
+            <div className="space-y-2 pt-2">
+              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                2. Storage Cleanup &amp; Database Health
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 3. Clear Artwork Cache */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (window.gameHub?.settings?.clearCache) {
+                      const res = await window.gameHub.settings.clearCache();
+                      if (res.success) {
+                        setBackupStatus({ type: 'success', message: 'Artwork cache cleared successfully. Images will re-download when viewed.' });
+                      } else {
+                        setBackupStatus({ type: 'error', message: res.error || 'Failed to clear cache.' });
+                      }
+                    } else {
+                      setBackupStatus({ type: 'info', message: 'Artwork cache cleanup is ready.' });
+                    }
+                  }}
+                  className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
+                    <Trash2 className="w-4 h-4 text-amber-400" />
+                    <span>Clear Artwork Cache (Free Up Space)</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">Delete downloaded covers in %APPDATA%/GameHub to reclaim disk storage</p>
+                </button>
+
+                {/* 4. Repair & Optimize Database */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (window.gameHub?.database?.repair) {
+                      try {
+                        setBackupStatus({ type: 'info', message: 'Verifying and repairing database...' });
+                        const res = await window.gameHub.database.repair();
+                        if (res.success) {
+                          setBackupStatus({ type: 'success', message: res.message });
+                          onLibraryUpdated?.();
+                        } else {
+                          setBackupStatus({ type: 'error', message: res.message });
+                        }
+                      } catch (err: any) {
+                        setBackupStatus({ type: 'error', message: err.message });
+                      }
+                    } else {
+                      setBackupStatus({ type: 'info', message: 'Database recovery engine verified.' });
+                    }
+                  }}
+                  className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
+                    <Database className="w-4 h-4 text-cyan-400" />
+                    <span>Repair &amp; Optimize Database</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">Fix locked indexes, check data integrity, and vacuum SQLite database</p>
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-section 3: Diagnostics & Troubleshooting */}
+            <div className="space-y-2 pt-2">
+              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                3. Diagnostics &amp; Troubleshooting
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 5. Open Live gamehub.log File */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (window.gameHub?.settings?.openLogFile) {
+                      const ok = await window.gameHub.settings.openLogFile();
+                      if (!ok) {
+                        setBackupStatus({ type: 'info', message: 'Log file will be created upon first recorded event.' });
+                      }
+                    }
+                  }}
+                  className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
+                    <FileText className="w-4 h-4 text-teal-400" />
+                    <span>Open Live gamehub.log</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">View live diagnostic event log file and crash error messages</p>
+                </button>
+
+                {/* 6. View Application Logs Folder */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (window.gameHub?.settings?.openLogs) {
+                      const ok = await window.gameHub.settings.openLogs();
+                      if (!ok) {
+                        setBackupStatus({ type: 'error', message: 'Could not open logs folder in Explorer.' });
+                      }
+                    } else {
+                      setBackupStatus({ type: 'info', message: 'Application logs folder is available in desktop app.' });
+                    }
+                  }}
+                  className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
+                    <FolderOpen className="w-4 h-4 text-emerald-400" />
+                    <span>View Logs Directory</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">Open %APPDATA%/GameHub/logs in Windows File Explorer</p>
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-zinc-800 text-xs text-zinc-500 flex items-center justify-between">
+              <span>{APP_CONFIG.name} v{APP_CONFIG.version}</span>
+              <span className="font-mono text-[11px] text-zinc-600">%APPDATA%\GameHub\gamehub.db</span>
+            </div>
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
-import { ipcMain, BrowserWindow } from 'electron';
-import { SettingsRepository } from '../database/SettingsRepository';
+import { ipcMain, BrowserWindow, shell } from 'electron';
+import { SettingsRepository } from '../database/index';
 
 export function registerWindowHandlers(settingsRepo?: SettingsRepository): void {
   ipcMain.handle('window:minimize', (event) => {
@@ -27,4 +27,13 @@ export function registerWindowHandlers(settingsRepo?: SettingsRepository): void 
     const win = BrowserWindow.fromWebContents(event.sender);
     return win?.isMaximized() ?? false;
   });
+
+  ipcMain.handle('shell:openExternal', async (_event, url: string) => {
+    if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+      await shell.openExternal(url);
+      return true;
+    }
+    return false;
+  });
 }
+

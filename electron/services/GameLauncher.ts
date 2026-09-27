@@ -188,7 +188,7 @@ export class GameLauncher {
       child.unref();
 
       // Record launch session in database
-      const launchId = this.launchRepo.recordLaunch(game.id, child.pid);
+      const launchId = this.launchRepo.recordLaunch(game.id);
 
       // Update last played timestamp
       this.gameRepo.updateLastPlayed(game.id);

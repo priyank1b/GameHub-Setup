@@ -168,6 +168,7 @@ export function registerScannerHandlers(
           installSizeBytes: candidate.installSizeBytes ?? candidate.installedSize,
           installSizeStatus: candidate.installSizeStatus,
           installSizeSource: candidate.installSizeSource,
+          totalPlayTime: 0,
           drive: candidate.drive || candidate.installPath.slice(0, 2).toUpperCase(),
         });
 

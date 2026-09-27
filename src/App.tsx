@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { Home } from './pages/Home';
@@ -7,19 +7,24 @@ import { Favorites } from './pages/Favorites';
 import { RecentlyPlayed } from './pages/RecentlyPlayed';
 import { Drives } from './pages/Drives';
 import { Settings } from './pages/Settings';
+import { Help } from './pages/Help';
 import { AddGameModal } from './components/AddGameModal';
 import { GameDetailsModal } from './components/GameDetailsModal';
 import { ConfirmModal, ConfirmModalType } from './components/ConfirmModal';
+import { AccountManagerModal } from './components/AccountManagerModal';
 import { Game } from './types/Game';
 import { PageRoute, LibraryFilter } from './types/Navigation';
+import { LauncherAccount } from './types/LauncherAccount';
 import { useNavigation } from './context/NavigationContext';
 import { ControllerManager } from './controllers/ControllerManager';
+import { Loader2, Gamepad2 } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<PageRoute>('home');
-  const [currentFilter, setCurrentFilter] = useState<LibraryFilter>('ALL');
+  const [currentFilter, setCurrentFilter] = useState<LibraryFilter>('INSTALLED');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [games, setGames] = useState<Game[]>([]);
+  const [accounts, setAccounts] = useState<LauncherAccount[]>([]);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [focusedGame, setFocusedGame] = useState<Game | null>(null);
   const [isDbLoaded, setIsDbLoaded] = useState<boolean>(false);
@@ -28,6 +33,7 @@ export const App: React.FC = () => {
   const isLocatingRef = useRef<boolean>(false);
   const [launchMessage, setLaunchMessage] = useState<string | null>(null);
   const [isAddGameOpen, setIsAddGameOpen] = useState<boolean>(false);
+  const [isAccountManagerOpen, setIsAccountManagerOpen] = useState<boolean>(false);
 
   // Custom UI alert & confirm dialog state
   const [confirmModalState, setConfirmModalState] = useState<{
@@ -71,7 +77,7 @@ export const App: React.FC = () => {
 
   // Cycle navigation pages with controller bumpers (LB / RB)
   useEffect(() => {
-    const pages: PageRoute[] = ['home', 'library', 'favorites', 'recently-played', 'drives', 'settings'];
+    const pages: PageRoute[] = ['home', 'library', 'favorites', 'recently-played', 'drives', 'help', 'settings'];
     setOnTabChange((direction) => {
       setCurrentPage((prev) => {
         const idx = pages.indexOf(prev);
@@ -92,13 +98,15 @@ export const App: React.FC = () => {
         const dbGames = await window.gameHub.games.getAll();
         setGames(dbGames);
         setIsDbLoaded(true);
-        // Asynchronously check for missing or restored games against active drives
+        // Asynchronously check for missing or restored games against active drives after initial load
         if (window.gameHub.games.checkMissing) {
-          window.gameHub.games.checkMissing().then((res) => {
-            if (res.success && ((res.missingCount && res.missingCount > 0) || (res.restoredCount && res.restoredCount > 0))) {
-              window.gameHub!.games.getAll().then((refreshed) => setGames(refreshed));
-            }
-          }).catch(() => {});
+          setTimeout(() => {
+            window.gameHub?.games?.checkMissing?.().then((res) => {
+              if (res.success && ((res.missingCount && res.missingCount > 0) || (res.restoredCount && res.restoredCount > 0))) {
+                window.gameHub!.games.getAll().then((refreshed) => setGames(refreshed));
+              }
+            }).catch(() => {});
+          }, 1500);
         }
       } catch (err: any) {
         console.error('[App] Failed to load games from IPC:', err.message);
@@ -112,9 +120,22 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  // Load connected launcher accounts from IPC
+  const loadAccounts = useCallback(async () => {
+    if (window.gameHub?.accounts?.getAll) {
+      try {
+        const accs = await window.gameHub.accounts.getAll();
+        setAccounts(accs || []);
+      } catch (err: any) {
+        console.error('[App] Failed to load accounts:', err.message);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     loadGames();
-  }, [loadGames]);
+    loadAccounts();
+  }, [loadGames, loadAccounts]);
 
   // Listen to live GameScanner progress events from IPC
   useEffect(() => {
@@ -246,7 +267,7 @@ export const App: React.FC = () => {
       onConfirm: async () => {
         setConfirmModalState((prev) => ({ ...prev, isOpen: false }));
         try {
-          const removed = await window.gameHub.games.remove(game.id);
+          const removed = await window.gameHub?.games.remove(game.id);
           if (removed) {
             setGames((prev) => prev.filter((g) => g.id !== game.id));
             if (selectedGame?.id === game.id) {
@@ -295,8 +316,52 @@ export const App: React.FC = () => {
     });
   };
 
-  const handleLaunch = async (game: Game) => {
+  const handleInstallGame = async (
+    game: Game,
+    launcherAccountId?: number,
+    externalGameId?: string
+  ) => {
+    try {
+      setLaunchMessage(`Handing off installation of "${game.name}" to official launcher...`);
+      const targetAccountId =
+        launcherAccountId || game.ownerships?.[0]?.launcherAccountId;
+      const targetExternalId =
+        externalGameId ||
+        game.ownerships?.[0]?.externalGameId ||
+        game.launcherAppId;
+
+      if (!targetAccountId || !targetExternalId) {
+        setLaunchMessage(`Cannot install: Missing account or game ID.`);
+        setTimeout(() => setLaunchMessage(null), 3000);
+        return;
+      }
+
+      if (window.gameHub?.canonical?.install) {
+        const res = await window.gameHub.canonical.install(targetAccountId, targetExternalId);
+        if (res.success) {
+          setLaunchMessage(res.message || `Installation handoff dispatched to official launcher.`);
+        } else {
+          setLaunchMessage(`Install notice: ${res.error || 'Check official launcher'}`);
+        }
+      }
+    } catch (err: any) {
+      console.error('[App] Install handoff error:', err.message);
+      setLaunchMessage(`Install failed: ${err.message}`);
+    } finally {
+      setTimeout(() => setLaunchMessage(null), 4000);
+    }
+  };
+
+  const handleLaunch = async (game: Game, launcherAccountId?: number) => {
     if (!game.isInstalled) {
+      // If game is available in launcher account, trigger install handoff
+      if (
+        game.libraryStatus === 'AVAILABLE' ||
+        (game.ownerships && game.ownerships.length > 0)
+      ) {
+        handleInstallGame(game, launcherAccountId);
+        return;
+      }
       // Prompt user to locate game instead of attempting doomed launch
       handleLocateGame(game);
       return;
@@ -305,17 +370,23 @@ export const App: React.FC = () => {
     const msg = `Launching ${game.name} via ${game.launcher}...`;
     setLaunchMessage(msg);
 
-    // Phase 10 Boundary: Suspend GameHub controller input so game receives full dedicated controller control
+    // Suspend GameHub controller input so game receives full dedicated controller control
     ControllerManager.getInstance().suspend();
 
-    if (window.gameHub?.games) {
+    if (window.gameHub?.canonical?.launch) {
       try {
-        const result = await window.gameHub.games.launch(game.id);
-        // Refresh playtime
-        const updated = await window.gameHub.games.getById(game.id);
-        if (updated) {
-          setGames((prev) => prev.map((g) => (g.id === game.id ? updated : g)));
+        const result = await window.gameHub.canonical.launch(game.id, launcherAccountId);
+        if (!result.success && window.gameHub.games?.launch) {
+          await window.gameHub.games.launch(game.id);
         }
+      } catch (err: any) {
+        if (window.gameHub.games?.launch) {
+          await window.gameHub.games.launch(game.id);
+        }
+      }
+    } else if (window.gameHub?.games) {
+      try {
+        await window.gameHub.games.launch(game.id);
       } catch (err: any) {
         console.error('[App] Launch IPC error:', err.message);
       }
@@ -575,17 +646,97 @@ export const App: React.FC = () => {
     }
   };
 
-  // Game counts for Sidebar badges
-  const gameCounts = {
-    total: games.length,
-    steam: games.filter((g) => g.launcher === 'STEAM').length,
-    epic: games.filter((g) => g.launcher === 'EPIC').length,
-    gog: games.filter((g) => g.launcher === 'GOG').length,
-    xbox: games.filter((g) => g.launcher === 'XBOX').length,
-    ubisoft: games.filter((g) => g.launcher === 'UBISOFT').length,
-    standalone: games.filter((g) => g.launcher === 'STANDALONE').length,
-    favorites: games.filter((g) => g.isFavorite).length,
-  };
+  // Memoized game counts for Sidebar badges (single O(N) pass instead of 9 separate iterations)
+  const gameCounts = useMemo(() => {
+    let installed = 0;
+    let available = 0;
+    let steam = 0;
+    let epic = 0;
+    let gog = 0;
+    let xbox = 0;
+    let ubisoft = 0;
+    let standalone = 0;
+    let favorites = 0;
+
+    for (const g of games) {
+      if (g.isInstalled) installed++;
+      if (g.libraryStatus === 'AVAILABLE' || (!g.isInstalled && (g.ownerships?.length ?? 0) > 0)) available++;
+      if (g.isFavorite) favorites++;
+      switch (g.launcher) {
+        case 'STEAM': steam++; break;
+        case 'EPIC': epic++; break;
+        case 'GOG': gog++; break;
+        case 'XBOX': xbox++; break;
+        case 'UBISOFT': ubisoft++; break;
+        case 'STANDALONE': standalone++; break;
+      }
+    }
+
+    return {
+      total: games.length,
+      installed,
+      available,
+      steam,
+      epic,
+      gog,
+      xbox,
+      ubisoft,
+      standalone,
+      favorites,
+    };
+  }, [games]);
+
+  // Game counts per launcher account
+  const accountGameCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const game of games) {
+      if (game.ownerships && game.ownerships.length > 0) {
+        for (const o of game.ownerships) {
+          counts[o.accountDisplayName] = (counts[o.accountDisplayName] || 0) + 1;
+        }
+      } else if (game.launcher) {
+        counts[game.launcher] = (counts[game.launcher] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [games]);
+
+  if (!isDbLoaded) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen w-screen bg-surface-900 text-zinc-100 select-none overflow-hidden relative">
+        {/* Subtle background ambient glows */}
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-1/2 left-1/3 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col items-center text-center space-y-6 animate-in fade-in zoom-in-95 duration-300">
+          <div className="relative">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-teal-500/20 via-zinc-800 to-zinc-900 border border-teal-500/30 flex items-center justify-center shadow-2xl shadow-teal-500/20">
+              <Gamepad2 className="w-10 h-10 text-teal-400 animate-pulse" />
+            </div>
+            <div className="absolute -bottom-1 -right-1 p-1 rounded-full bg-zinc-900 border border-zinc-700">
+              <Loader2 className="w-4 h-4 text-teal-400 animate-spin" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <h1 className="text-2xl font-black tracking-tight text-white flex items-center justify-center gap-2">
+              <span>GameHub</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 uppercase tracking-widest">
+                v2.0
+              </span>
+            </h1>
+            <p className="text-xs text-zinc-400 font-medium">
+              Loading your games and accounts...
+            </p>
+          </div>
+
+          <div className="w-48 h-1 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-teal-500 to-cyan-400 rounded-full animate-pulse w-2/3" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-surface-900 text-zinc-100 antialiased font-sans select-none">
@@ -594,6 +745,9 @@ export const App: React.FC = () => {
         currentPage={currentPage}
         currentFilter={currentFilter}
         onNavigate={handleNavigate}
+        onOpenAccounts={() => setIsAccountManagerOpen(true)}
+        accounts={accounts}
+        accountGameCounts={accountGameCounts}
         gameCounts={gameCounts}
       />
 
@@ -625,6 +779,7 @@ export const App: React.FC = () => {
           onNavigate={handleNavigate}
           onRescan={handleRescan}
           onAddGame={() => setIsAddGameOpen(true)}
+          onOpenAccounts={() => setIsAccountManagerOpen(true)}
           isScanning={isScanning}
         />
 
@@ -643,6 +798,7 @@ export const App: React.FC = () => {
               games={games}
               onToggleFavorite={handleToggleFavorite}
               onLaunch={handleLaunch}
+              onInstall={handleInstallGame}
               onNavigate={handleNavigate}
               onSelectGame={(g) => {
                 setFocusedGame(g);
@@ -663,6 +819,7 @@ export const App: React.FC = () => {
               searchQuery={searchQuery}
               onToggleFavorite={handleToggleFavorite}
               onLaunch={handleLaunch}
+              onInstall={handleInstallGame}
               onSelectGame={(g) => {
                 setFocusedGame(g);
                 setSelectedGame(g);
@@ -671,6 +828,9 @@ export const App: React.FC = () => {
               onLocate={handleLocateGame}
               onRemove={handleRemoveGame}
               onHide={handleHideGame}
+              accounts={accounts}
+              accountGameCounts={accountGameCounts}
+              onOpenAccounts={() => setIsAccountManagerOpen(true)}
             />
           )}
 
@@ -699,7 +859,23 @@ export const App: React.FC = () => {
 
           {currentPage === 'drives' && <Drives games={games} />}
 
-          {currentPage === 'settings' && <Settings onLibraryUpdated={loadGames} />}
+          {currentPage === 'help' && (
+            <Help
+              onNavigate={handleNavigate}
+              onOpenAccounts={() => setIsAccountManagerOpen(true)}
+            />
+          )}
+
+          {currentPage === 'settings' && (
+            <Settings
+              games={games}
+              onLibraryUpdated={() => {
+                loadGames();
+                loadAccounts();
+              }}
+              onNavigate={handleNavigate}
+            />
+          )}
         </main>
       </div>
 
@@ -710,11 +886,22 @@ export const App: React.FC = () => {
         onAdd={handleAddGame}
       />
 
+      {/* Multi-Account Manager Modal */}
+      <AccountManagerModal
+        isOpen={isAccountManagerOpen}
+        onClose={() => setIsAccountManagerOpen(false)}
+        onAccountsUpdated={() => {
+          loadGames();
+          loadAccounts();
+        }}
+      />
+
       {/* Full Game Details Modal */}
       <GameDetailsModal
         game={selectedGame}
         onClose={() => setSelectedGame(null)}
         onLaunch={handleLaunch}
+        onInstall={handleInstallGame}
         onToggleFavorite={handleToggleFavorite}
         onUpdateGame={handleUpdateGame}
         onLocate={handleLocateGame}

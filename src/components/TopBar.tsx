@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SearchBar } from './SearchBar';
-import { RefreshCw, Plus, Settings, Minus, Square, Copy, X } from 'lucide-react';
+import { RefreshCw, Plus, Settings, Minus, Square, Copy, X, Users, HelpCircle } from 'lucide-react';
 import { PageRoute } from '../types/Navigation';
 
 interface TopBarProps {
@@ -11,6 +11,7 @@ interface TopBarProps {
   onNavigate: (page: PageRoute) => void;
   onRescan?: () => void;
   onAddGame?: () => void;
+  onOpenAccounts?: () => void;
   isScanning?: boolean;
 }
 
@@ -26,6 +27,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onNavigate,
   onRescan,
   onAddGame,
+  onOpenAccounts,
   isScanning = false,
 }) => {
   const { controllerInfo } = useNavigation();
@@ -158,6 +160,51 @@ export const TopBar: React.FC<TopBarProps> = ({
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Game</span>
+            </button>
+          )}
+        </FocusableItem>
+
+        {/* Accounts Manager Button */}
+        <FocusableItem
+          id="topbar-accounts"
+          scope="topbar"
+          group="actions"
+          onConfirm={onOpenAccounts}
+        >
+          {({ ref, isFocused }) => (
+            <button
+              ref={ref}
+              type="button"
+              onClick={onOpenAccounts}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-850 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 ${
+                isFocused ? 'controller-focus' : ''
+              }`}
+              title="Manage Launcher Accounts"
+            >
+              <Users className="w-3.5 h-3.5 text-teal-400" />
+              <span>Accounts</span>
+            </button>
+          )}
+        </FocusableItem>
+
+        {/* Help & Documentation */}
+        <FocusableItem
+          id="topbar-help"
+          scope="topbar"
+          group="actions"
+          onConfirm={() => onNavigate('help')}
+        >
+          {({ ref, isFocused }) => (
+            <button
+              ref={ref}
+              type="button"
+              onClick={() => onNavigate('help')}
+              className={`p-2 rounded-xl bg-surface-850 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-all cursor-pointer ${
+                isFocused ? 'controller-focus' : ''
+              }`}
+              title="Help & Documentation"
+            >
+              <HelpCircle className="w-4 h-4" />
             </button>
           )}
         </FocusableItem>

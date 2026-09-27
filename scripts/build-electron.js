@@ -176,6 +176,20 @@ async function buildElectron() {
     format: 'esm',
   });
 
+  await build({
+    entryPoints: [path.resolve(root, 'electron/services/launchers/LauncherAccountService.ts')],
+    bundle: true,
+    platform: 'node',
+    target: 'node20',
+    outfile: path.resolve(root, 'dist-electron/services/launchers/LauncherAccountService.js'),
+    external: ['electron', 'better-sqlite3'],
+    sourcemap: true,
+    format: 'esm',
+    banner: {
+      js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
+    },
+  });
+
   // Ensure assets directory in dist-electron has tray icon
   const distAssetsDir = path.resolve(root, 'dist-electron/assets');
   if (!fs.existsSync(distAssetsDir)) {

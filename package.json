@@ -1,6 +1,6 @@
 {
   "name": "gamehub",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "author": "GameHub Team",
   "license": "MIT",
   "description": "Unified PC Game Library & Launcher",
@@ -13,7 +13,8 @@
     "dev:electron": "node scripts/dev-electron.js",
     "build": "node scripts/build-electron.js && vite build",
     "build:electron": "node scripts/build-electron.js",
-    "package": "node scripts/build-electron.js && vite build && electron-builder --dir",
+    "package": "node scripts/build-electron.js && vite build && electron-builder",
+    "package:dir": "node scripts/build-electron.js && vite build && electron-builder --dir",
     "dist": "node scripts/build-electron.js && vite build && electron-builder",
     "preview": "vite preview",
     "postinstall": "node scripts/postinstall.js"

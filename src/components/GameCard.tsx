@@ -18,6 +18,9 @@ import {
   Info,
   Play,
   EyeOff,
+  Download,
+  User,
+  Users,
 } from 'lucide-react';
 
 import { formatImageUrl } from '../utils/formatImage';
@@ -26,7 +29,8 @@ import { useFocusable } from '../hooks/useFocusable';
 interface GameCardProps {
   game: Game;
   onToggleFavorite?: (id: number) => void;
-  onLaunch?: (game: Game) => void;
+  onLaunch?: (game: Game, launcherAccountId?: number) => void;
+  onInstall?: (game: Game, launcherAccountId?: number, externalGameId?: string) => void;
   onClick?: (game: Game) => void;
   onLocate?: (game: Game) => void;
   onRemove?: (game: Game) => void;
@@ -38,11 +42,13 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
   game,
   onToggleFavorite,
   onLaunch,
+  onInstall,
   onClick,
   onLocate,
   onRemove,
   onHide,
   onFocus,
+
 }) => {
   const [imgError, setImgError] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(formatImageUrl(game.coverImage));
@@ -73,21 +79,50 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
     }
   };
 
-  const isMissing = !game.isInstalled;
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
+  const isAvailable =
+    game.libraryStatus === 'AVAILABLE' ||
+    (!game.isInstalled && (game.ownerships?.length ?? 0) > 0);
+  const isMissing = !game.isInstalled && !isAvailable;
+
+  // When the game is installed, only display the account(s) where it is actually installed locally!
+  // On uninstalled/available games, show all accounts so user knows where it's available.
+  const displayOwnerships = React.useMemo(() => {
+    if (!game.ownerships || game.ownerships.length === 0) return [];
+    if (game.isInstalled) {
+      const installedOnly = game.ownerships.filter((o) => o.isInstalled);
+      return installedOnly.length > 0 ? installedOnly : game.ownerships;
+    }
+    return game.ownerships;
+  }, [game.ownerships, game.isInstalled]);
+
+  const hasMultipleAccounts = displayOwnerships.length > 1;
+  const ownerNames = displayOwnerships.map((o) => o.accountDisplayName);
+
+  const handleAction = () => {
+    if (game.isInstalled && onLaunch) {
+      // Installed games launch directly without interrupting the user
+      onLaunch(game);
+    } else if (isAvailable && onInstall) {
+      if (game.ownerships && game.ownerships.length > 1) {
+        setShowAccountPicker(true);
+      } else {
+        const first = game.ownerships?.[0];
+        onInstall(game, first?.launcherAccountId, first?.externalGameId);
+      }
+    } else if (isMissing && onLocate) {
+      onLocate(game);
+    } else {
+      onClick?.(game);
+    }
+  };
 
   const { ref: focusRef, isFocused } = useFocusable<HTMLDivElement>({
     id: `game-card-${game.id}`,
     scope: 'main',
     group: 'grid',
     onConfirm: () => {
-      // A Button or Enter: Launch game directly if installed; locate if missing
-      if (onLaunch && game.isInstalled) {
-        onLaunch(game);
-      } else if (onLocate && !game.isInstalled) {
-        onLocate(game);
-      } else {
-        onClick?.(game);
-      }
+      handleAction();
     },
     onSecondary: () => {
       // X Button: Toggle favorite
@@ -138,14 +173,16 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
     };
   }, [menuOpen]);
 
+  const steamAppId = game.launcherAppId || game.ownerships?.find((o) => o.launcher === 'STEAM')?.externalGameId;
+
   const handleImageError = () => {
     if (
-      game.launcher === 'STEAM' &&
-      game.launcherAppId &&
+      (game.launcher === 'STEAM' || game.ownerships?.some((o) => o.launcher === 'STEAM')) &&
+      steamAppId &&
       currentSrc &&
-      currentSrc.includes('library_600x900.jpg')
+      !currentSrc.includes('header.jpg')
     ) {
-      setCurrentSrc(`https://cdn.cloudflare.steamstatic.com/steam/apps/${game.launcherAppId}/header.jpg`);
+      setCurrentSrc(`https://cdn.cloudflare.steamstatic.com/steam/apps/${steamAppId}/header.jpg`);
     } else {
       setImgError(true);
     }
@@ -270,6 +307,21 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-30 pointer-events-auto">
           <div className="flex items-center gap-1.5 flex-wrap">
             <LauncherBadge launcher={game.launcher} />
+            {isAvailable && (
+              <span className="inline-flex items-center gap-1 bg-sky-500/90 text-zinc-950 font-bold px-1.5 py-0.5 rounded text-[10px] tracking-wider uppercase shadow-md backdrop-blur-sm">
+                <Download className="w-3 h-3 text-zinc-950" />
+                Available
+              </span>
+            )}
+            {hasMultipleAccounts && (
+              <span
+                className="inline-flex items-center gap-1 bg-teal-500/20 text-teal-300 border border-teal-500/30 font-bold px-1.5 py-0.5 rounded text-[10px] tracking-wider uppercase shadow-md backdrop-blur-sm"
+                title={`Owned across multiple accounts: ${ownerNames.join(', ')}`}
+              >
+                <Users className="w-3 h-3 text-teal-300" />
+                {game.ownerships?.length} Accounts
+              </span>
+            )}
             {isMissing && (
               <span className="inline-flex items-center gap-1 bg-amber-500/95 text-zinc-950 font-bold px-1.5 py-0.5 rounded text-[10px] tracking-wider uppercase shadow-md backdrop-blur-sm">
                 <AlertTriangle className="w-3 h-3 text-zinc-950" />
@@ -298,16 +350,24 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (onLocate) {
-                    onLocate(game);
-                  } else {
-                    onClick?.(game);
-                  }
+                  handleAction();
                 }}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs tracking-wider uppercase shadow-lg shadow-amber-500/30 transition-all hover:scale-105 active:scale-95"
               >
                 <FolderSearch className="w-4 h-4" />
                 <span>Locate</span>
+              </button>
+            ) : isAvailable ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAction();
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 font-bold text-xs tracking-wider uppercase shadow-lg shadow-sky-500/30 transition-all hover:scale-105 active:scale-95"
+              >
+                <Download className="w-4 h-4" />
+                <span>Install</span>
               </button>
             ) : (
               <PlayButton
@@ -315,7 +375,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
                 size="md"
                 onPlay={(e) => {
                   e.stopPropagation();
-                  onLaunch?.(game);
+                  handleAction();
                 }}
               />
             )}
@@ -336,76 +396,104 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
 
       {/* Card Info Section */}
       <div className="p-3.5 flex flex-col flex-1 justify-between gap-1.5 bg-surface-850 rounded-b-2xl relative z-20">
-        <div className="flex items-start justify-between gap-2 relative">
-          <h3
-            title={game.name}
-            className={`font-semibold text-sm transition-colors line-clamp-1 ${
-              isMissing
-                ? isFocused
-                  ? 'text-amber-300'
-                  : 'text-zinc-300 group-hover:text-amber-300'
-                : isFocused
-                ? 'text-teal-300'
-                : 'text-zinc-100 group-hover:text-teal-300'
-            }`}
-          >
-            {game.name}
-          </h3>
-
-          <div className="relative">
-            <button
-              ref={menuButtonRef}
-              type="button"
-              onClick={handleToggleMenu}
-              className="text-zinc-500 hover:text-zinc-300 p-0.5 rounded transition-colors cursor-pointer"
-              title="More Options"
+        <div>
+          <div className="flex items-start justify-between gap-2 relative">
+            <h3
+              title={game.name}
+              className={`font-semibold text-sm transition-colors line-clamp-1 ${
+                isMissing
+                  ? isFocused
+                    ? 'text-amber-300'
+                    : 'text-zinc-300 group-hover:text-amber-300'
+                  : isFocused
+                  ? 'text-teal-300'
+                  : 'text-zinc-100 group-hover:text-teal-300'
+              }`}
             >
-              <MoreVertical className="w-4 h-4" />
-            </button>
+              {game.name}
+            </h3>
 
-            {/* Context Dropdown Menu - rendered via Portal to avoid scale transforms and sub-pixel blur */}
-            {menuOpen &&
-              createPortal(
-                <div
-                  ref={menuRef}
-                  style={{
-                    position: 'fixed',
-                    bottom: menuPos.bottom,
-                    top: menuPos.top,
-                    right: menuPos.right,
-                    zIndex: 9999,
-                    transform: 'none',
-                  }}
-                  className="w-48 rounded-xl bg-[#18181b] border border-zinc-700 shadow-2xl py-1.5 text-[13px] text-zinc-100 antialiased select-none"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* 1. View Details */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onClick?.(game);
+            <div className="relative">
+              <button
+                ref={menuButtonRef}
+                type="button"
+                onClick={handleToggleMenu}
+                className="text-zinc-500 hover:text-zinc-300 p-0.5 rounded transition-colors cursor-pointer"
+                title="More Options"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+
+              {/* Context Dropdown Menu */}
+              {menuOpen &&
+                createPortal(
+                  <div
+                    ref={menuRef}
+                    style={{
+                      position: 'fixed',
+                      bottom: menuPos.bottom,
+                      top: menuPos.top,
+                      right: menuPos.right,
+                      zIndex: 9999,
+                      transform: 'none',
                     }}
-                    className="w-full text-left px-3 py-2 text-zinc-100 hover:bg-zinc-800 flex items-center gap-2.5 transition-colors cursor-pointer font-medium"
+                    className="w-48 rounded-xl bg-[#18181b] border border-zinc-700 shadow-2xl py-1.5 text-[13px] text-zinc-100 antialiased select-none"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <Info className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                    <span>View Details</span>
-                  </button>
-
-                  {/* 2. Play or Locate */}
-                  {isMissing ? (
+                    {/* 1. View Details */}
                     <button
                       type="button"
                       onClick={() => {
                         setMenuOpen(false);
-                        onLocate?.(game);
+                        onClick?.(game);
                       }}
-                      className="w-full text-left px-3 py-2 text-amber-300 hover:bg-amber-500/20 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                      className="w-full text-left px-3 py-2 text-zinc-100 hover:bg-zinc-800 flex items-center gap-2.5 transition-colors cursor-pointer font-medium"
                     >
-                      <FolderSearch className="w-3.5 h-3.5 shrink-0" />
-                      <span>Locate Game...</span>
+                      <Info className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                      <span>View Details</span>
                     </button>
-                  ) : (
+
+                    {/* Multi-account selector if multiple ownerships exist */}
+                    {game.ownerships && game.ownerships.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setShowAccountPicker(true);
+                        }}
+                        className="w-full text-left px-3 py-2 text-teal-300 hover:bg-teal-500/20 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                      >
+                        <User className="w-3.5 h-3.5 shrink-0" />
+                        <span>Select Account...</span>
+                      </button>
+                    )}
+
+                    {/* 2. Play, Install or Locate */}
+                    {isMissing ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onLocate?.(game);
+                        }}
+                        className="w-full text-left px-3 py-2 text-amber-300 hover:bg-amber-500/20 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                      >
+                        <FolderSearch className="w-3.5 h-3.5 shrink-0" />
+                        <span>Locate Game...</span>
+                      </button>
+                    ) : isAvailable ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          handleAction();
+                        }}
+                        className="w-full text-left px-3 py-2 text-sky-400 hover:bg-sky-500/20 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 shrink-0" />
+                        <span>Install Game</span>
+                      </button>
+                    ) : (
                     <>
                       <button
                         type="button"
@@ -493,6 +581,33 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
           </div>
         </div>
 
+        {/* Multi-Account or Family Ownership Pills */}
+        {displayOwnerships.length > 0 &&
+          (displayOwnerships.length > 1 ||
+            (game.launcher === 'STEAM' &&
+              displayOwnerships.some(
+                (o) =>
+                  o.accountDisplayName !== 'Steam' &&
+                  o.accountDisplayName !== 'STEAM'
+              ))) && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {displayOwnerships.map((o) => (
+                <span
+                  key={o.launcherGameEntryId}
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-mono border ${
+                    o.isInstalled
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                      : 'bg-zinc-800/80 text-zinc-300 border-zinc-700/50'
+                  }`}
+                  title={`${o.launcher} (${o.accountDisplayName}): ${o.status}`}
+                >
+                  {o.launcher} • {o.accountDisplayName}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center justify-between text-xs text-zinc-400 pt-1 border-t border-zinc-800/60">
           <span className="text-[11px] text-zinc-500 line-clamp-1">{game.genre || 'Game'}</span>
           <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400 font-mono">
@@ -501,6 +616,83 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
           </span>
         </div>
       </div>
+
+      {/* Account Picker Modal for Multi-Account Choices */}
+      {showAccountPicker &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAccountPicker(false);
+            }}
+          >
+            <div
+              className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-700 p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div>
+                  <h4 className="font-bold text-white text-sm">Select Account</h4>
+                  <p className="text-xs text-zinc-400 line-clamp-1">{game.name}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAccountPicker(false)}
+                  className="text-zinc-500 hover:text-zinc-300 p-1"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {game.ownerships?.map((o) => (
+                  <div
+                    key={o.launcherGameEntryId}
+                    className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/60 border border-zinc-700/50 hover:border-zinc-500 transition-all"
+                  >
+                    <div>
+                      <div className="text-xs font-bold text-zinc-200">
+                        {o.launcher} — {o.accountDisplayName}
+                      </div>
+                      <div className="text-[11px] font-mono text-zinc-400">
+                        {o.isInstalled ? 'Installed locally' : 'Available in library'}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAccountPicker(false);
+                        if (o.isInstalled) {
+                          onLaunch?.(game, o.launcherAccountId);
+                        } else {
+                          onInstall?.(game, o.launcherAccountId, o.externalGameId);
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold tracking-wider uppercase transition-all shadow-md ${
+                        o.isInstalled
+                          ? 'bg-teal-500 hover:bg-teal-400 text-zinc-950 shadow-teal-500/20'
+                          : 'bg-sky-500 hover:bg-sky-400 text-zinc-950 shadow-sky-500/20'
+                      }`}
+                    >
+                      {o.isInstalled ? 'Play' : 'Install'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAccountPicker(false)}
+                className="w-full py-2 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 });
+

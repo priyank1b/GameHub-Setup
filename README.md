@@ -1,6 +1,6 @@
 # GameHub 🎮 — Unified PC Game Library & Launcher
 
-[![Release](https://img.shields.io/badge/release-v1.0.3-teal.svg)](https://github.com/priyank1b/GameHub-Setup/releases)
+[![Release](https://img.shields.io/badge/release-v2.0.0-teal.svg)](https://github.com/priyank1b/GameHub-Setup/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](https://github.com/priyank1b/GameHub-Setup)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Framework](https://img.shields.io/badge/Electron-33.x-47848F.svg)](https://www.electronjs.org/)
@@ -14,6 +14,14 @@
 
 ## ✨ Features
 
+- 👥 **Multi-Account & Uninstalled Library Support (v2.0.0)**:
+  - Connect multiple accounts per launcher (multiple local Steam user profiles, Family Sharing libraries, and Epic Games accounts).
+  - Full uninstalled library synchronization: browse and install owned games directly from GameHub.
+  - Smart canonical game grouping: groups game ownership across accounts without duplicating entries.
+  - Accurate library crediting: strictly attributes installed and shared games to their genuine owners.
+  - Dual Home & Library views: instantly switch between **Installed**, **Available to Install**, and **All Games**.
+  - One-click installation handoff via official launcher protocols (`steam://install/<id>`, Epic Store install triggers).
+  - Robust NSIS setup with automatic termination of active instances and clean upgrades.
 - 🔄 **Automatic Game Rescan (v1.0.3)**:
   - Configurable session-tied background timer (15m to 24h, default OFF) that discovers newly installed games automatically.
   - Collision-free: skips scheduled cycles when a manual scan is already active.

@@ -19,6 +19,7 @@ import {
   Save,
   RotateCcw,
   EyeOff,
+  Download,
 } from 'lucide-react';
 import { LauncherBadge } from './LauncherBadge';
 import { formatImageUrl } from '../utils/formatImage';
@@ -28,7 +29,8 @@ import { FocusableItem } from './FocusableItem';
 interface GameDetailsModalProps {
   game: Game | null;
   onClose: () => void;
-  onLaunch: (game: Game) => void;
+  onLaunch: (game: Game, launcherAccountId?: number) => void;
+  onInstall?: (game: Game, launcherAccountId?: number, externalGameId?: string) => void;
   onToggleFavorite: (id: number) => void;
   onUpdateGame?: (updatedGame: Game) => void;
   onLocate?: (game: Game) => void;
@@ -40,6 +42,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
   game,
   onClose,
   onLaunch,
+  onInstall,
   onToggleFavorite,
   onUpdateGame,
   onLocate,
@@ -50,6 +53,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRecalculatingSize, setIsRecalculatingSize] = useState(false);
 
   useEffect(() => {
     if (game) {
@@ -88,18 +92,39 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
     }
   }, [game]);
 
-  if (!game) return null;
+  useEffect(() => {
+    if (game && game.installSizeStatus === 'CALCULATING') {
+      window.gameHub?.storage?.resolveSize(game.id, false).then((res) => {
+        if (res?.success && res?.info && onUpdateGame) {
+          onUpdateGame({
+            ...game,
+            installSizeBytes: res.info.sizeBytes,
+            installedSize: res.info.sizeBytes,
+            installSizeStatus: res.info.status,
+            installSizeSource: res.info.source,
+            installSizeUpdatedAt: res.info.updatedAt,
+          });
+        }
+      }).catch(() => {});
+    }
+  }, [game?.id, game?.installSizeStatus]);
 
-  const isMissing = !game.isInstalled;
+  if (!game) {
+    return null;
+  }
+
+  const isAvailable =
+    game.libraryStatus === 'AVAILABLE' ||
+    (!game.isInstalled && (game.ownerships?.length ?? 0) > 0);
+  const isMissing = !game.isInstalled && !isAvailable;
 
   const formatPlayTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
+    const s = typeof seconds === 'number' && !isNaN(seconds) ? seconds : 0;
+    const hours = Math.floor(s / 3600);
+    const minutes = Math.floor((s % 3600) / 60);
     if (hours === 0) return `${minutes} minutes`;
     return `${hours} hours ${minutes} minutes`;
   };
-
-  const [isRecalculatingSize, setIsRecalculatingSize] = useState(false);
 
   const handleRecalculateSize = async () => {
     if (!game || isRecalculatingSize) return;
@@ -124,23 +149,6 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
       setIsRecalculatingSize(false);
     }
   };
-
-  useEffect(() => {
-    if (game && game.installSizeStatus === 'CALCULATING') {
-      window.gameHub?.storage?.resolveSize(game.id, false).then((res) => {
-        if (res?.success && res?.info && onUpdateGame) {
-          onUpdateGame({
-            ...game,
-            installSizeBytes: res.info.sizeBytes,
-            installedSize: res.info.sizeBytes,
-            installSizeStatus: res.info.status,
-            installSizeSource: res.info.source,
-            installSizeUpdatedAt: res.info.updatedAt,
-          });
-        }
-      }).catch(() => {});
-    }
-  }, [game?.id, game?.installSizeStatus]);
 
   const getSizeDisplay = () => {
     if (game.installSizeStatus === 'CALCULATING' || isRecalculatingSize) {
@@ -298,6 +306,12 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
             <div className="space-y-2 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <LauncherBadge launcher={game.launcher} />
+                {isAvailable && (
+                  <span className="inline-flex items-center gap-1 bg-sky-500/90 text-zinc-950 font-bold px-2 py-0.5 rounded text-[11px] tracking-wider uppercase shadow-md">
+                    <Download className="w-3.5 h-3.5 text-zinc-950" />
+                    Ready to Install
+                  </span>
+                )}
                 {isMissing && (
                   <span className="inline-flex items-center gap-1 bg-amber-500/90 text-zinc-950 font-bold px-2 py-0.5 rounded text-[11px] tracking-wider uppercase shadow-md">
                     <AlertTriangle className="w-3.5 h-3.5 text-zinc-950" />
@@ -335,7 +349,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
         {/* Action Controls */}
         <div className="px-6 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            {/* Button 1: PLAY */}
+            {/* Button 1: PLAY, INSTALL, or LOCATE */}
             {isMissing ? (
               <FocusableItem
                 id="modal-play-btn"
@@ -355,6 +369,34 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                   >
                     <FolderSearch className="w-4 h-4 text-zinc-950" />
                     <span>LOCATE GAME</span>
+                  </button>
+                )}
+              </FocusableItem>
+            ) : isAvailable ? (
+              <FocusableItem
+                id="modal-play-btn"
+                scope="game-details-modal"
+                group="modal-actions"
+                onConfirm={() => {
+                  const first = game.ownerships?.[0];
+                  onInstall?.(game, first?.launcherAccountId, first?.externalGameId);
+                }}
+                onBack={onClose}
+              >
+                {({ ref, isFocused }) => (
+                  <button
+                    ref={ref}
+                    type="button"
+                    onClick={() => {
+                      const first = game.ownerships?.[0];
+                      onInstall?.(game, first?.launcherAccountId, first?.externalGameId);
+                    }}
+                    className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 font-bold text-sm tracking-wide shadow-lg shadow-sky-500/20 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${
+                      isFocused ? 'controller-focus' : ''
+                    }`}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>INSTALL GAME</span>
                   </button>
                 )}
               </FocusableItem>
@@ -410,7 +452,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
 
           <div className="flex items-center gap-2">
             {/* Button 3: OPEN FOLDER */}
-            {!isMissing && (
+            {!isMissing && !isAvailable && (
               <FocusableItem
                 id="modal-open-folder-btn"
                 scope="game-details-modal"

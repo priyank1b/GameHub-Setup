@@ -6,8 +6,17 @@ export type PageRoute =
   | 'favorites' 
   | 'recently-played' 
   | 'drives' 
-  | 'settings';
+  | 'settings'
+  | 'help';
 
-export type LibraryFilter = 'ALL' | GameLauncher | 'MISSING' | 'FAVORITES';
+export type LibraryFilter =
+  | 'ALL'
+  | 'INSTALLED'
+  | 'AVAILABLE'
+  | GameLauncher
+  | 'MISSING'
+  | 'FAVORITES'
+  | (string & {});
+
 
 export type SortOption = 'name-asc' | 'name-desc' | 'recent' | 'playtime' | 'size' | 'recently-added';
