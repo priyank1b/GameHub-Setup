@@ -30,3 +30,9 @@ yarn-error.log*
 Thumbs.db
 [Dd]esktop.ini
 .DS_Store
+
+# Specification archives & internal specs
+GameHub-*-spec/
+GameHub-*-spec.zip
+*-spec/
+*-spec.zip
