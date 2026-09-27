@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net, Menu } from 'electron';
+import { app, BrowserWindow, protocol, net, Menu, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -29,6 +29,10 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
+if (process.env.NODE_ENV === 'development') {
+  app.commandLine.appendSwitch('remote-debugging-port', '9222');
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -44,6 +48,8 @@ function createWindow() {
     ? path.join(process.resourcesPath, 'assets', 'icon.png')
     : path.join(__dirname, '../assets/icon.png');
 
+  const isMax = settingsRepo?.get<boolean>('window_is_maximized', false) ?? false;
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -55,6 +61,7 @@ function createWindow() {
     autoHideMenuBar: true,
     frame: false,
     show: false,
+    paintWhenInitiallyHidden: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -66,9 +73,26 @@ function createWindow() {
     },
   });
 
+  if (isMax) {
+    mainWindow.maximize();
+  }
+
   mainWindow.removeMenu();
   mainWindow.setMenuBarVisibility(false);
   Menu.setApplicationMenu(null);
+
+  // Guarantee security & trust: all external web links (e.g. Steam, Epic, docs) must open in the user's
+  // default native browser (Chrome, Edge, etc.) and NEVER in an embedded frameless Electron popup.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http:') || url.startsWith('https:')) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    console.log(`[Renderer] [lvl:${level}] ${message} (${sourceId}:${line})`);
+  });
 
   // Broadcast window maximize state changes to renderer and persist state
   mainWindow.on('maximize', () => {
@@ -82,13 +106,23 @@ function createWindow() {
     trayService?.setWasMaximized(false);
   });
 
-  mainWindow.once('ready-to-show', () => {
-    const isMax = settingsRepo?.get<boolean>('window_is_maximized', false) ?? false;
-    if (isMax) {
-      mainWindow?.maximize();
+  // Safety fallback: if ready-to-show somehow hasn't fired in 4 seconds, show window
+  const fallbackShowTimer = setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      Logger.warn('App', 'Window displayed via timeout fallback.');
+      mainWindow.show();
     }
-    mainWindow?.show();
-    console.log('[GameHub] Window ready-to-show event fired successfully.');
+  }, 4000);
+
+  mainWindow.once('ready-to-show', () => {
+    clearTimeout(fallbackShowTimer);
+    if (!mainWindow) return;
+    if (isMax && !mainWindow.isMaximized()) {
+      mainWindow.maximize();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+    Logger.info('App', 'Window displayed smoothly via ready-to-show.');
 
     if (process.argv.includes('--test-launch')) {
       console.log('[GameHub] Test launch verified. Automatically closing for test verification.');
@@ -121,13 +155,6 @@ function createWindow() {
     }
   });
 
-  mainWindow.webContents.on('did-finish-load', () => {
-    if (mainWindow && !mainWindow.isVisible()) {
-      mainWindow.show();
-      Logger.info('App', 'Window displayed via did-finish-load fallback.');
-    }
-  });
-
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
     Logger.error('App', `Failed to load ${validatedURL}: [${errorCode}] ${errorDescription}`);
     if (mainWindow && !mainWindow.isVisible()) {
@@ -149,6 +176,7 @@ function createWindow() {
 import { initDatabase, closeDatabase, GameRepository, SettingsRepository } from './database/index';
 import { registerAllIpcHandlers } from './ipc/index';
 import { enrichExistingSteamGames } from './services/SteamMetadataService';
+import { LauncherAccountService } from './services/launchers/LauncherAccountService';
 import { TrayService } from './services/TrayService';
 import { Logger } from './services/Logger';
 
@@ -198,11 +226,18 @@ if (!gotTheLock) {
     registerAllIpcHandlers(db);
     settingsRepo = new SettingsRepository(db);
 
-    // Non-blocking background enrichment of existing Steam games
-    const gameRepo = new GameRepository(db);
-    enrichExistingSteamGames(gameRepo).catch((err: any) => {
-      Logger.warn('SteamMetadata', `Background Steam enrichment error: ${err.message}`);
-    });
+    // Light deferred tasks: only run if needed without locking the main thread
+    setTimeout(() => {
+      try {
+        const gameRepo = new GameRepository(db);
+        // Only run Steam enrichment if there are unenriched games needing it
+        enrichExistingSteamGames(gameRepo).catch((err: any) => {
+          Logger.warn('SteamMetadata', `Background Steam enrichment error: ${err.message}`);
+        });
+      } catch (err: any) {
+        Logger.warn('BackgroundTasks', `Deferred background error: ${err.message}`);
+      }
+    }, 10000);
   } catch (err: any) {
     Logger.error('Database', `Fatal: Failed to initialize SQLite database or IPC: ${err.message}`);
   }

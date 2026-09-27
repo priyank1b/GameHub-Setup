@@ -32,3 +32,6 @@ nsis:
   uninstallerIcon: assets/icon.ico
   installerHeaderIcon: assets/icon.ico
   artifactName: "GameHub-Setup.exe"
+  uninstallDisplayName: "${productName}"
+  deleteAppDataOnUninstall: false
+  include: build/installer.nsh

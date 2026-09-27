@@ -127,6 +127,30 @@ export interface GameHubBridge {
     onRescan: (callback: () => void) => () => void;
   };
 
+  accounts: {
+    getAll: () => Promise<import('./LauncherAccount').LauncherAccount[]>;
+    discover: () => Promise<import('./LauncherAccount').LauncherAccount[]>;
+    sync: (accountId: number) => Promise<{ success: boolean; syncedCount: number; error?: string }>;
+    syncAll: () => Promise<Record<number, { success: boolean; syncedCount: number; error?: string }>>;
+    disconnect: (accountId: number) => Promise<boolean>;
+    reconnect: (accountId: number) => Promise<boolean>;
+    getDetectedFriends: () => Promise<Array<{ steamId: string; personaName: string; avatarUrl?: string }>>;
+    addFriend: (data: {
+      launcher: import('./Launcher').GameLauncher;
+      externalAccountId: string;
+      displayName: string;
+      avatarUrl?: string;
+    }) => Promise<import('./LauncherAccount').LauncherAccount>;
+  };
+
+  canonical: {
+    getAll: (includeHidden?: boolean) => Promise<import('./LauncherAccount').CanonicalGame[]>;
+    install: (launcherAccountId: number, externalGameId: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+    launch: (canonicalGameId: number, launcherAccountId?: number) => Promise<{ success: boolean; message?: string; error?: string }>;
+    toggleFavorite: (canonicalGameId: number) => Promise<boolean>;
+    setHidden: (canonicalGameId: number, isHidden: boolean) => Promise<boolean>;
+  };
+
   window?: {
     minimize: () => Promise<void>;
     maximize: () => Promise<boolean>;
@@ -135,6 +159,8 @@ export interface GameHubBridge {
     onMaximizedChange: (callback: (isMax: boolean) => void) => () => void;
     onRestored?: (callback: () => void) => () => void;
   };
+
+  openExternal?: (url: string) => Promise<boolean>;
 }
 
 declare global {

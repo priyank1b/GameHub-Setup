@@ -3,7 +3,7 @@ import { Game } from '../src/types/Game';
 
 // Expose safe, strongly-typed API bridge to the renderer process
 contextBridge.exposeInMainWorld('gameHub', {
-  appVersion: '1.0.3',
+  appVersion: '2.0.0',
   platform: process.platform,
   ping: () => 'pong',
 
@@ -133,6 +133,30 @@ contextBridge.exposeInMainWorld('gameHub', {
     },
   },
 
+  accounts: {
+    getAll: () => ipcRenderer.invoke('accounts:getAll'),
+    discover: () => ipcRenderer.invoke('accounts:discover'),
+    sync: (accountId: number) => ipcRenderer.invoke('accounts:sync', accountId),
+    syncAll: () => ipcRenderer.invoke('accounts:syncAll'),
+    disconnect: (accountId: number) => ipcRenderer.invoke('accounts:disconnect', accountId),
+    reconnect: (accountId: number) => ipcRenderer.invoke('accounts:reconnect', accountId),
+    getDetectedFriends: () => ipcRenderer.invoke('accounts:getDetectedFriends'),
+    addFriend: (data: { launcher: string; externalAccountId: string; displayName: string; avatarUrl?: string }) =>
+      ipcRenderer.invoke('accounts:addFriend', data),
+  },
+
+  canonical: {
+    getAll: (includeHidden?: boolean) => ipcRenderer.invoke('canonical:getAll', includeHidden),
+    install: (launcherAccountId: number, externalGameId: string) =>
+      ipcRenderer.invoke('canonical:install', launcherAccountId, externalGameId),
+    launch: (canonicalGameId: number, launcherAccountId?: number) =>
+      ipcRenderer.invoke('canonical:launch', canonicalGameId, launcherAccountId),
+    toggleFavorite: (canonicalGameId: number) =>
+      ipcRenderer.invoke('canonical:toggleFavorite', canonicalGameId),
+    setHidden: (canonicalGameId: number, isHidden: boolean) =>
+      ipcRenderer.invoke('canonical:setHidden', canonicalGameId, isHidden),
+  },
+
   window: {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
     maximize: (): Promise<boolean> => ipcRenderer.invoke('window:maximize'),
@@ -153,4 +177,7 @@ contextBridge.exposeInMainWorld('gameHub', {
       };
     },
   },
+
+  openExternal: (url: string): Promise<boolean> =>
+    ipcRenderer.invoke('shell:openExternal', url),
 });

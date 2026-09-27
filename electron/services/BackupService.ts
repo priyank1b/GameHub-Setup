@@ -47,15 +47,18 @@ export class BackupService {
       let destPath = targetPath;
 
       if (!destPath) {
-        const focusedWindow = BrowserWindow.getFocusedWindow() || undefined;
-        const res = await dialog.showSaveDialog(focusedWindow, {
+        const focusedWindow = BrowserWindow.getFocusedWindow();
+        const options: Electron.SaveDialogOptions = {
           title: 'Export GameHub Library Backup',
           defaultPath: 'gamehub-library.json',
           filters: [
             { name: 'GameHub Backup (*.json)', extensions: ['json'] },
             { name: 'All Files (*.*)', extensions: ['*'] },
           ],
-        });
+        };
+        const res = focusedWindow
+          ? await dialog.showSaveDialog(focusedWindow, options)
+          : await dialog.showSaveDialog(options);
 
         if (res.canceled || !res.filePath) {
           return { success: false, cancelled: true };
@@ -131,15 +134,18 @@ export class BackupService {
       let srcPath = sourcePath;
 
       if (!srcPath) {
-        const focusedWindow = BrowserWindow.getFocusedWindow() || undefined;
-        const res = await dialog.showOpenDialog(focusedWindow, {
+        const focusedWindow = BrowserWindow.getFocusedWindow();
+        const openOptions: Electron.OpenDialogOptions = {
           title: 'Import GameHub Library Backup',
           filters: [
             { name: 'GameHub Backup (*.json)', extensions: ['json'] },
             { name: 'All Files (*.*)', extensions: ['*'] },
           ],
           properties: ['openFile'],
-        });
+        };
+        const res = focusedWindow
+          ? await dialog.showOpenDialog(focusedWindow, openOptions)
+          : await dialog.showOpenDialog(openOptions);
 
         if (res.canceled || !res.filePaths || res.filePaths.length === 0) {
           return { success: false, cancelled: true, gamesImported: 0, gamesUpdated: 0, totalGames: 0 };

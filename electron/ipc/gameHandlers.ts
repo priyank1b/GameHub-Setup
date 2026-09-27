@@ -1,20 +1,74 @@
 import { ipcMain } from 'electron';
-import { GameRepository, LaunchRepository } from '../database/index';
+import path from 'path';
+import fs from 'fs';
+import {
+  GameRepository,
+  LaunchRepository,
+  CanonicalGameRepository,
+} from '../database/index';
 import { Game } from '../../src/types/Game';
 import { GameLauncher } from '../services/GameLauncher';
+import { LauncherAccountService } from '../services/launchers/LauncherAccountService';
 
 export function registerGameHandlers(
   gameRepo: GameRepository,
   launchRepo: LaunchRepository,
-  gameLauncher: GameLauncher
+  gameLauncher: GameLauncher,
+  canonicalRepo?: CanonicalGameRepository,
+  accountService?: LauncherAccountService
 ): void {
-  // Get all games
+  // Get all games (returns canonical items if available, else legacy)
   ipcMain.handle('games:getAll', async () => {
     try {
+      if (canonicalRepo) {
+        const canonicalGames = canonicalRepo.getAll(false);
+        if (canonicalGames.length > 0) {
+          return canonicalGames.map((cg) => {
+            const primaryInstall =
+              cg.installations.find((i) => i.status === 'INSTALLED') ||
+              cg.installations[0];
+            const primaryOwnership = cg.ownerships[0];
+
+            const gameRecord: Game = {
+              id: cg.id,
+              name: cg.title,
+              normalizedName: cg.normalizedTitle,
+              coverImage: cg.coverImage,
+              backgroundImage: cg.backgroundImage,
+              iconPath: cg.iconPath,
+              description: cg.description,
+              developer: cg.developer,
+              publisher: cg.publisher,
+              genre: cg.genre,
+              releaseDate: cg.releaseDate,
+              isFavorite: cg.isFavorite,
+              isInstalled: cg.status === 'INSTALLED',
+              isManual: false,
+              isHidden: cg.isHidden,
+              lastPlayedAt: cg.lastPlayedAt,
+              totalPlayTime: cg.totalPlayTime,
+              launcher: primaryInstall?.launcher || primaryOwnership?.launcher || 'UNKNOWN',
+              launcherAppId: primaryOwnership?.externalGameId,
+              installPath: primaryInstall?.installPath,
+              executablePath: primaryInstall?.executablePath,
+              installedSize: primaryInstall?.installSizeBytes || 0,
+              installSizeBytes: primaryInstall?.installSizeBytes || 0,
+              installSizeStatus: primaryInstall?.installSizeStatus || 'UNKNOWN',
+              installSizeSource: primaryInstall?.installSizeSource || 'unknown',
+              drive: primaryInstall?.installPath
+                ? primaryInstall.installPath.slice(0, 2).toUpperCase()
+                : undefined,
+              libraryStatus: cg.status,
+              ownerships: cg.ownerships,
+            };
+            return gameRecord;
+          });
+        }
+      }
       return gameRepo.getAll();
     } catch (err: any) {
       console.error('[IPC games:getAll] Error:', err.message);
-      throw err;
+      return gameRepo.getAll();
     }
   });
 
@@ -216,6 +270,11 @@ export function registerGameHandlers(
       let restoredCount = 0;
 
       for (const game of allGames) {
+        // Skip uninstalled / cloud library entries - they have no local files to check
+        if (!game.isInstalled) {
+          continue;
+        }
+
         const gameDrive = (game.drive || (game.installPath ? game.installPath.slice(0, 2) : 'C:')).toUpperCase();
         if (!availableDrives.has(gameDrive)) {
           // Drive is unplugged / disconnected - do not mark as missing

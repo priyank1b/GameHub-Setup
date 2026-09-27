@@ -1,9 +1,17 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Game } from '../types/Game';
 import { GameGrid } from '../components/GameGrid';
 import { PlayButton } from '../components/PlayButton';
-import { Sparkles, Clock, Gamepad2, Layers, HardDrive, Database, AlertTriangle, FolderSearch } from 'lucide-react';
-import { PageRoute } from '../types/Navigation';
+import {
+  Sparkles,
+  Clock,
+  Layers,
+  AlertTriangle,
+  FolderSearch,
+  Download,
+  HardDrive,
+} from 'lucide-react';
+import { PageRoute, LibraryFilter } from '../types/Navigation';
 import { FocusableItem } from '../components/FocusableItem';
 import { formatImageUrl } from '../utils/formatImage';
 
@@ -11,7 +19,8 @@ interface HomeProps {
   games: Game[];
   onToggleFavorite: (id: number) => void;
   onLaunch: (game: Game) => void;
-  onNavigate: (page: PageRoute) => void;
+  onInstall?: (game: Game, launcherAccountId?: number, externalGameId?: string) => void;
+  onNavigate: (page: PageRoute, filter?: LibraryFilter) => void;
   onSelectGame?: (game: Game) => void;
   onFocusGame?: (game: Game) => void;
   onLocate?: (game: Game) => void;
@@ -23,6 +32,7 @@ export const Home: React.FC<HomeProps> = ({
   games,
   onToggleFavorite,
   onLaunch,
+  onInstall,
   onNavigate,
   onSelectGame,
   onFocusGame,
@@ -30,63 +40,53 @@ export const Home: React.FC<HomeProps> = ({
   onRemove,
   onHide,
 }) => {
-  const [driveCount, setDriveCount] = React.useState<number>(5);
+  // Default to INSTALLED so user sees ready-to-play games first
+  const [homeFilter, setHomeFilter] = useState<'INSTALLED' | 'AVAILABLE' | 'ALL'>('INSTALLED');
 
-  React.useEffect(() => {
-    async function fetchDriveCount() {
-      if (window.gameHub?.drives) {
-        try {
-          const drives = await window.gameHub.drives.getAvailable();
-          if (drives && drives.length > 0) {
-            setDriveCount(drives.filter((d) => d.isIncluded).length || drives.length);
-            return;
-          }
-        } catch {}
-      }
-      try {
-        const res = await fetch('/api/drives');
-        if (res.ok) {
-          const drives = await res.json();
-          if (Array.isArray(drives) && drives.length > 0) {
-            setDriveCount(drives.length);
-          }
-        }
-      } catch {}
-    }
-    fetchDriveCount();
-  }, []);
+  const installedGames = useMemo(() => games.filter((g) => g.isInstalled), [games]);
 
-  const totalPlaySeconds = games.reduce((acc, g) => acc + (g.totalPlayTime || 0), 0);
-  const playTimeDisplay =
-    totalPlaySeconds >= 3600
-      ? `${(totalPlaySeconds / 3600).toFixed(1)} hrs`
-      : totalPlaySeconds > 0
-      ? `${Math.ceil(totalPlaySeconds / 60)} mins`
-      : '0 hrs';
+  const availableGames = useMemo(() => {
+    return games.filter(
+      (g) =>
+        g.libraryStatus === 'AVAILABLE' ||
+        (!g.isInstalled && (g.ownerships?.length ?? 0) > 0)
+    );
+  }, [games]);
 
-  const totalSizeBytes = games.reduce((acc, g) => acc + (g.installSizeBytes ?? g.installedSize ?? 0), 0);
-  const totalStorageDisplay =
-    totalSizeBytes >= 1024 * 1024 * 1024 * 1024
-      ? `${(totalSizeBytes / (1024 * 1024 * 1024 * 1024)).toFixed(2)} TB`
-      : totalSizeBytes > 0
-      ? `${(totalSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-      : '0 GB';
+  const displayedGames = useMemo(() => {
+    if (homeFilter === 'INSTALLED') return installedGames;
+    if (homeFilter === 'AVAILABLE') return availableGames;
+    return games;
+  }, [homeFilter, installedGames, availableGames, games]);
 
-  const installedGames = games.filter((g) => g.isInstalled);
-  const missingGamesCount = games.length - installedGames.length;
+  // Prioritize installed games for the hero banner
+  const featuredGame = useMemo(() => {
+    return (
+      installedGames.find((g) => g.lastPlayedAt) ||
+      installedGames.find((g) => g.isFavorite) ||
+      installedGames[0] ||
+      availableGames[0] ||
+      games[0] ||
+      null
+    );
+  }, [installedGames, availableGames, games]);
 
-  const featuredGame =
-    installedGames.find((g) => g.lastPlayedAt) ||
-    installedGames.find((g) => g.isFavorite) ||
-    installedGames[0] ||
-    games.find((g) => g.lastPlayedAt) ||
-    games[0] ||
-    null;
+  const isFeaturedAvailable = Boolean(
+    featuredGame &&
+      (featuredGame.libraryStatus === 'AVAILABLE' ||
+        (!featuredGame.isInstalled && (featuredGame.ownerships?.length ?? 0) > 0))
+  );
 
-  const recentGames = games
-    .filter((g) => Boolean(g.lastPlayedAt))
-    .sort((a, b) => new Date(b.lastPlayedAt!).getTime() - new Date(a.lastPlayedAt!).getTime())
-    .slice(0, 4);
+  const isFeaturedMissing = Boolean(
+    featuredGame && !featuredGame.isInstalled && !isFeaturedAvailable
+  );
+
+  const recentGames = useMemo(() => {
+    return games
+      .filter((g) => Boolean(g.lastPlayedAt))
+      .sort((a, b) => new Date(b.lastPlayedAt!).getTime() - new Date(a.lastPlayedAt!).getTime())
+      .slice(0, 4);
+  }, [games]);
 
   return (
     <div className="space-y-10 pb-12">
@@ -109,6 +109,11 @@ export const Home: React.FC<HomeProps> = ({
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>READY TO PLAY</span>
               </div>
+            ) : isFeaturedAvailable ? (
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 text-xs font-semibold tracking-wide">
+                <Download className="w-3.5 h-3.5 text-sky-400" />
+                <span>AVAILABLE TO INSTALL</span>
+              </div>
             ) : (
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold tracking-wide">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
@@ -129,13 +134,18 @@ export const Home: React.FC<HomeProps> = ({
                 id="hero-resume-game"
                 scope="main"
                 group="hero"
-                onConfirm={() =>
-                  featuredGame.isInstalled
-                    ? onLaunch(featuredGame)
-                    : onLocate
-                    ? onLocate(featuredGame)
-                    : onSelectGame?.(featuredGame)
-                }
+                onConfirm={() => {
+                  if (featuredGame.isInstalled) {
+                    onLaunch(featuredGame);
+                  } else if (isFeaturedAvailable) {
+                    const first = featuredGame.ownerships?.[0];
+                    onInstall
+                      ? onInstall(featuredGame, first?.launcherAccountId, first?.externalGameId)
+                      : onSelectGame?.(featuredGame);
+                  } else {
+                    onLocate ? onLocate(featuredGame) : onSelectGame?.(featuredGame);
+                  }
+                }}
               >
                 {({ ref, isFocused }) => (
                   <div ref={ref} className={isFocused ? 'controller-focus rounded-xl' : ''}>
@@ -145,6 +155,20 @@ export const Home: React.FC<HomeProps> = ({
                         size="lg"
                         onPlay={() => onLaunch(featuredGame)}
                       />
+                    ) : isFeaturedAvailable ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const first = featuredGame.ownerships?.[0];
+                          onInstall
+                            ? onInstall(featuredGame, first?.launcherAccountId, first?.externalGameId)
+                            : onSelectGame?.(featuredGame);
+                        }}
+                        className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 font-bold text-sm tracking-wider uppercase shadow-lg shadow-sky-500/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                      >
+                        <Download className="w-5 h-5" />
+                        <span>INSTALL GAME</span>
+                      </button>
                     ) : (
                       <button
                         type="button"
@@ -165,13 +189,13 @@ export const Home: React.FC<HomeProps> = ({
                 id="hero-browse-library"
                 scope="main"
                 group="hero"
-                onConfirm={() => onNavigate('library')}
+                onConfirm={() => onNavigate('library', 'INSTALLED')}
               >
                 {({ ref, isFocused }) => (
                   <button
                     ref={ref}
                     type="button"
-                    onClick={() => onNavigate('library')}
+                    onClick={() => onNavigate('library', 'INSTALLED')}
                     className={`px-5 py-3 rounded-xl bg-surface-800/80 hover:bg-zinc-700 text-sm font-semibold text-zinc-200 hover:text-white transition-all border border-zinc-700/60 ${
                       isFocused ? 'controller-focus' : ''
                     }`}
@@ -184,60 +208,6 @@ export const Home: React.FC<HomeProps> = ({
           </div>
         </div>
       )}
-
-      {/* Quick Overview Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Installed Games */}
-        <div className="p-5 rounded-2xl bg-surface-850 border border-zinc-800/80 flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20">
-            <Gamepad2 className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs text-zinc-400 uppercase tracking-wider font-medium">Installed Games</p>
-            <div className="flex items-baseline gap-2">
-              <p className="text-2xl font-bold text-white font-['Outfit']">{installedGames.length}</p>
-              {missingGamesCount > 0 && (
-                <span className="text-[11px] font-medium text-amber-400 font-mono">
-                  ({missingGamesCount} missing)
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Total Playtime */}
-        <div className="p-5 rounded-2xl bg-surface-850 border border-zinc-800/80 flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-            <Clock className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs text-zinc-400 uppercase tracking-wider font-medium">Total Playtime</p>
-            <p className="text-2xl font-bold text-white font-['Outfit']">{playTimeDisplay}</p>
-          </div>
-        </div>
-
-        {/* Storage Utilized */}
-        <div className="p-5 rounded-2xl bg-surface-850 border border-zinc-800/80 flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <Database className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs text-zinc-400 uppercase tracking-wider font-medium">Storage Utilized</p>
-            <p className="text-2xl font-bold text-white font-['Outfit']">{totalStorageDisplay}</p>
-          </div>
-        </div>
-
-        {/* Drives Detected */}
-        <div className="p-5 rounded-2xl bg-surface-850 border border-zinc-800/80 flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <HardDrive className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs text-zinc-400 uppercase tracking-wider font-medium">Drives Detected</p>
-            <p className="text-2xl font-bold text-white font-['Outfit']">{driveCount} Drives Active</p>
-          </div>
-        </div>
-      </div>
 
       {/* Recently Played Section */}
       <section className="space-y-4">
@@ -262,6 +232,7 @@ export const Home: React.FC<HomeProps> = ({
             games={recentGames}
             onToggleFavorite={onToggleFavorite}
             onLaunch={onLaunch}
+            onInstall={onInstall}
             onSelectGame={onSelectGame}
             onFocusGame={onFocusGame}
             onLocate={onLocate}
@@ -281,32 +252,144 @@ export const Home: React.FC<HomeProps> = ({
         )}
       </section>
 
-      {/* All Games Preview Section */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Layers className="w-5 h-5 text-teal-400" />
-            <h2 className="text-xl font-bold text-white font-['Outfit']">All Games</h2>
+      {/* Main Games Section with Installed / Available / All Toggle */}
+      <section className="space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/60 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400">
+              <HardDrive className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white font-['Outfit']">Your Games</h2>
+              <p className="text-xs text-zinc-400">
+                {homeFilter === 'INSTALLED'
+                  ? 'Showing installed titles ready to play'
+                  : homeFilter === 'AVAILABLE'
+                  ? 'Showing games ready to download & install'
+                  : 'Showing your complete collection'}
+              </p>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => onNavigate('library')}
-            className="text-xs font-semibold text-teal-400 hover:text-teal-300 transition-colors"
-          >
-            Open Library &rarr;
-          </button>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Filter Toggle Pills */}
+            <div className="inline-flex p-1 rounded-xl bg-surface-900 border border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setHomeFilter('INSTALLED')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  homeFilter === 'INSTALLED'
+                    ? 'bg-teal-500 text-zinc-950 shadow-md font-bold'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <HardDrive className="w-3.5 h-3.5" />
+                <span>Installed</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
+                    homeFilter === 'INSTALLED' ? 'bg-zinc-950/20 text-zinc-950' : 'bg-zinc-800 text-zinc-400'
+                  }`}
+                >
+                  {installedGames.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHomeFilter('AVAILABLE')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  homeFilter === 'AVAILABLE'
+                    ? 'bg-sky-500 text-zinc-950 shadow-md font-bold'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Available to Install</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
+                    homeFilter === 'AVAILABLE' ? 'bg-zinc-950/20 text-zinc-950' : 'bg-zinc-800 text-zinc-400'
+                  }`}
+                >
+                  {availableGames.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHomeFilter('ALL')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  homeFilter === 'ALL'
+                    ? 'bg-zinc-700 text-white shadow-md font-bold'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>All</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
+                    homeFilter === 'ALL' ? 'bg-zinc-950/30 text-white' : 'bg-zinc-800 text-zinc-400'
+                  }`}
+                >
+                  {games.length}
+                </span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigate('library', homeFilter)}
+              className="text-xs font-semibold text-teal-400 hover:text-teal-300 transition-colors ml-1 cursor-pointer"
+            >
+              Open Library &rarr;
+            </button>
+          </div>
         </div>
 
-        <GameGrid
-          games={games}
-          onToggleFavorite={onToggleFavorite}
-          onLaunch={onLaunch}
-          onSelectGame={onSelectGame}
-          onFocusGame={onFocusGame}
-          onLocate={onLocate}
-          onRemove={onRemove}
-          onHide={onHide}
-        />
+        {displayedGames.length > 0 ? (
+          <GameGrid
+            games={displayedGames}
+            initialBatch={24}
+            batchSize={18}
+            onToggleFavorite={onToggleFavorite}
+            onLaunch={onLaunch}
+            onInstall={onInstall}
+            onSelectGame={onSelectGame}
+            onFocusGame={onFocusGame}
+            onLocate={onLocate}
+            onRemove={onRemove}
+            onHide={onHide}
+          />
+        ) : (
+          <div className="p-12 rounded-2xl bg-surface-850/60 border border-zinc-800/80 text-center flex flex-col items-center justify-center space-y-3">
+            <div className="p-4 rounded-full bg-zinc-800/60 text-zinc-500 mb-1">
+              {homeFilter === 'INSTALLED' ? (
+                <HardDrive className="w-6 h-6 text-teal-400/60" />
+              ) : (
+                <Download className="w-6 h-6 text-sky-400/60" />
+              )}
+            </div>
+            <p className="text-base font-semibold text-zinc-200">
+              {homeFilter === 'INSTALLED'
+                ? 'No Installed Games Found'
+                : 'No Games Available to Install'}
+            </p>
+            <p className="text-xs text-zinc-400 max-w-md">
+              {homeFilter === 'INSTALLED'
+                ? 'Select "Available to Install" to download games from your linked Epic Games or Steam accounts, or add a game manually.'
+                : 'All your games are currently installed or no external accounts have pending games.'}
+            </p>
+            {homeFilter === 'INSTALLED' && availableGames.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setHomeFilter('AVAILABLE')}
+                className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 hover:bg-sky-500/20 text-xs font-semibold transition-all cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>View {availableGames.length} Games Available to Install</span>
+              </button>
+            )}
+          </div>
+        )}
       </section>
     </div>
   );

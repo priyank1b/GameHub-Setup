@@ -2,6 +2,44 @@
 
 All notable changes to GameHub are documented in this file.
 
+## [2.0.0] - 2026-09-28
+
+### Added — Multi-Account Management & Uninstalled Games Library
+
+#### Multi-Account Launcher Architecture
+- **Multiple Accounts Per Launcher**:
+  - Full support for connecting multiple accounts on Steam (local user profiles, Family Sharing borrower libraries), Epic Games Store, and other platforms.
+  - Zero-auth offline detection of local Steam profiles via `loginusers.vdf` and user-specific configurations.
+  - OS-level secure credential encryption via Windows DPAPI (`safeStorage`) for account tokens and settings.
+  - Database schema migration (Migration 5) adding tables: `launcher_accounts`, `canonical_games`, `launcher_game_entries`, and `local_installations`.
+
+#### Uninstalled Games Discovery & Synchronization
+- **Complete Library View**:
+  - Synchronizes uninstalled owned games from Steam local configuration caches (`localconfig.vdf`, `librarycache`) and Epic Games Store catalogs.
+  - Optional Steam Web API key support for syncing remote accounts and friends without local machine profiles.
+  - Smart filtering skips empty store and activity stubs (e.g. 0-achievement browsing stubs), ensuring only genuine purchases and owned games appear.
+  - One-click install action triggering official launcher download schemes (`steam://install/<id>`, `com.epicgames.launcher://apps/<id>?action=install`).
+
+#### Canonical Grouping & Strict Ownership Attribution
+- **Deduplication Across Accounts**:
+  - Automatically unifies titles owned across multiple accounts or launchers into a single canonical game card with multi-account badges.
+  - Interactive multi-account selector dialog when launching or installing games available across several accounts.
+  - Strict ownership crediting: accurately tracks installed games via manifest ownership tags (`LastOwner`) to prevent family-shared or borrowed titles from falsely claiming installation status on non-owning accounts.
+
+#### Dual-State Library & Home Navigation
+- **Installed vs. Available to Install Views**:
+  - Home page and Library now feature dedicated views for **Installed** games, **Available to Install**, and **All Games**.
+  - Default view launches directly into installed titles for immediate playability.
+  - Hero banner dynamically responds: shows "Ready to Play" with instant launch for installed titles, and "Available to Install" with install triggers for uninstalled owned games.
+
+#### Clean Reinstallation & Upgrade Installer Experience
+- **NSIS Setup Overhaul**:
+  - Custom NSIS pre-installation initialization terminates active or tray-minimized `GameHub.exe` instances so files and native modules (`better-sqlite3.node`) are never locked.
+  - Automatic detection and silent uninstallation of prior versions before new files are written.
+  - Clean uninstallation cleanup: removes temporary runtime unpacks, locales, and asar structures from `$INSTDIR`.
+
+---
+
 ## [1.0.3] - 2026-09-22
 
 ### Added — Unified Storage Detection & Automatic Rescan

@@ -48,4 +48,7 @@ export interface Game {
   lastPlayedAt?: string;
   totalPlayTime: number; // in seconds
   drive?: string;
+  libraryStatus?: 'INSTALLED' | 'AVAILABLE' | 'INSTALLING' | 'UNKNOWN' | 'SYNC_ERROR';
+  ownerships?: import('./LauncherAccount').OwnershipRecord[];
 }
+

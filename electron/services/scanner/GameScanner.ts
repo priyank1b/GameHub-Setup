@@ -307,7 +307,9 @@ export class GameScanner {
           }
           if (cand.installPath && cand.installPath !== existing.installPath) {
             updates.installPath = cand.installPath;
-            existingByInstall.delete(this.normalizePath(existing.installPath));
+            if (existing.installPath) {
+              existingByInstall.delete(this.normalizePath(existing.installPath));
+            }
             existing.installPath = cand.installPath;
             existingByInstall.set(normInstall, existing);
             needsUpdate = true;
@@ -434,6 +436,7 @@ export class GameScanner {
               installSizeStatus: cand.installSizeStatus || (cand.installedSize ? 'KNOWN' : 'UNKNOWN'),
               installSizeSource: cand.installSizeSource || (cand.installedSize ? 'metadata' : 'unknown'),
               installSizeUpdatedAt: (cand.installedSize || cand.installSizeBytes) ? new Date().toISOString() : undefined,
+              isFavorite: false,
               isInstalled: true,
               isManual: false,
               totalPlayTime: cand.totalPlayTime || 0,
