@@ -14,11 +14,13 @@ import {
   PanelLeftOpen,
   BookOpen,
   Download,
+  GripVertical,
 } from 'lucide-react';
 import { PageRoute, LibraryFilter } from '../types/Navigation';
 import { APP_CONFIG } from '../config/appConfig';
 import { LauncherAccount } from '../types/LauncherAccount';
 import { FocusableItem } from './FocusableItem';
+import omniPlayLogo from '../assets/logo.png';
 
 interface SidebarProps {
   currentPage: PageRoute;
@@ -126,6 +128,83 @@ export const Sidebar: React.FC<SidebarProps> = ({
       });
   }, [accounts, accountGameCounts]);
 
+  // Draggable menu ordering (Library, Favorites, Recently Played)
+  const [navOrder, setNavOrder] = useState<('library' | 'favorites' | 'recently-played')[]>(() => {
+    try {
+      const saved = localStorage.getItem('omniplay_sidebar_nav_order');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (
+          Array.isArray(parsed) &&
+          parsed.length === 3 &&
+          parsed.includes('library') &&
+          parsed.includes('favorites') &&
+          parsed.includes('recently-played')
+        ) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return ['library', 'favorites', 'recently-played'];
+  });
+
+  const [draggedId, setDraggedId] = useState<'library' | 'favorites' | 'recently-played' | null>(null);
+  const [dragOverId, setDragOverId] = useState<'library' | 'favorites' | 'recently-played' | null>(null);
+  const [dropPosition, setDropPosition] = useState<'before' | 'after'>('before');
+
+  const handleDragStart = (e: React.DragEvent, id: 'library' | 'favorites' | 'recently-played') => {
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedId(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: 'library' | 'favorites' | 'recently-played') => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const pos = e.clientY < midY ? 'before' : 'after';
+    if (dragOverId !== id || dropPosition !== pos) {
+      setDragOverId(id);
+      setDropPosition(pos);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    const related = e.relatedTarget as Node | null;
+    if (!e.currentTarget.contains(related)) {
+      setDragOverId(null);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: 'library' | 'favorites' | 'recently-played') => {
+    e.preventDefault();
+    const sourceId = (e.dataTransfer.getData('text/plain') || draggedId) as 'library' | 'favorites' | 'recently-played';
+    if (sourceId && sourceId !== targetId) {
+      const list = [...navOrder];
+      const fromIdx = list.indexOf(sourceId);
+      const toIdx = list.indexOf(targetId);
+      if (fromIdx !== -1 && toIdx !== -1) {
+        list.splice(fromIdx, 1);
+        const insertIdx = dropPosition === 'before'
+          ? (toIdx > fromIdx ? toIdx - 1 : toIdx)
+          : (toIdx > fromIdx ? toIdx : toIdx + 1);
+        list.splice(insertIdx, 0, sourceId);
+        setNavOrder(list);
+        try {
+          localStorage.setItem('omniplay_sidebar_nav_order', JSON.stringify(list));
+        } catch {}
+      }
+    }
+    setDraggedId(null);
+    setDragOverId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
+    setDragOverId(null);
+  };
+
   return (
     <aside
       className={`${
@@ -141,15 +220,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {!isCollapsed ? (
             <>
               <div className="flex items-center gap-3 no-drag min-w-0">
-                <div className="p-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex-shrink-0">
-                  <Gamepad2 className="w-5 h-5" />
+                <div className="p-1 rounded-xl bg-teal-500/10 border border-teal-500/25 flex-shrink-0 flex items-center justify-center">
+                  <img src={omniPlayLogo} className="w-6 h-6 rounded-lg object-contain" alt="OmniPlay Logo" />
                 </div>
                 <div className="min-w-0">
                   <h1 className="font-bold text-base text-white font-['Outfit'] tracking-tight truncate leading-none">
                     {APP_CONFIG.name}
                   </h1>
-                  <p className="text-[9px] font-medium text-teal-400/90 font-mono tracking-wider truncate mt-0.5">
-                    LAUNCHER SHELL
+                  <p className="text-[9px] font-semibold text-teal-400 font-mono tracking-wider truncate mt-0.5">
+                    ALL-IN-ONE LAUNCHER
                   </p>
                 </div>
               </div>
@@ -166,11 +245,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               type="button"
               onClick={handleToggleCollapse}
-              className="w-10 h-10 mx-auto rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 hover:bg-teal-500/20 hover:text-teal-300 flex items-center justify-center transition-all no-drag group"
+              className="w-10 h-10 mx-auto rounded-xl bg-teal-500/10 border border-teal-500/20 hover:bg-teal-500/20 flex items-center justify-center transition-all no-drag group"
               title="Expand sidebar"
             >
-              <Gamepad2 className="w-5 h-5 group-hover:hidden" />
-              <PanelLeftOpen className="w-5 h-5 hidden group-hover:block" />
+              <img src={omniPlayLogo} className="w-6 h-6 rounded-lg object-contain group-hover:hidden" alt="OmniPlay" />
+              <PanelLeftOpen className="w-5 h-5 text-teal-400 hidden group-hover:block" />
             </button>
           )}
         </div>
@@ -212,306 +291,228 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </FocusableItem>
           </div>
 
-          {/* LIBRARY Group */}
-          <div className="space-y-1">
-            <FocusableItem
-              id="nav-library-main"
-              scope="sidebar"
-              group="nav"
-              onConfirm={() => onNavigate('library', 'INSTALLED')}
-            >
-              {({ ref, isFocused }) => (
-                <div
-                  ref={ref}
-                  className={`w-full flex items-center ${
-                    isCollapsed ? 'justify-center h-10 px-0' : 'justify-between px-3 py-2'
-                  } rounded-xl text-xs font-bold uppercase tracking-wider transition-all select-none ${
-                    isLibraryActive
-                      ? 'text-teal-400 bg-teal-500/10 border border-teal-500/20'
-                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
-                  } ${isFocused ? 'controller-focus' : ''}`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('library', 'INSTALLED')}
-                    className={`flex items-center ${
-                      isCollapsed ? 'justify-center w-full' : 'gap-2.5 flex-1 text-left min-w-0 cursor-pointer'
-                    }`}
-                    title={`Library - Installed (${gameCounts.installed ?? gameCounts.total})`}
-                  >
-                    <Layers className="w-4 h-4 text-teal-400 flex-shrink-0" />
-                    {!isCollapsed && <span className="truncate">LIBRARY</span>}
-                  </button>
+          {/* Draggable Nav Items: Library, Favorites, Recently Played */}
+          {navOrder.map((id) => {
+            const isDragging = draggedId === id;
+            const isOver = dragOverId === id && draggedId !== id;
 
-                  {!isCollapsed && (
-                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-1">
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300">
-                        {gameCounts.installed ?? gameCounts.total}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleToggleLibrary}
-                        className="p-1 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
-                        title={isLibraryOpen ? 'Collapse library submenus' : 'Expand library submenus'}
-                      >
-                        <ChevronDown
-                          className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                            isLibraryOpen ? 'rotate-0' : '-rotate-90'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </FocusableItem>
-
-            {/* Collapsed Mode: Quick Access to Available to Install */}
-            {isCollapsed && (
-              <FocusableItem
-                id="nav-available-collapsed"
-                scope="sidebar"
-                group="nav"
-                onConfirm={() => onNavigate('library', 'AVAILABLE')}
+            return (
+              <div
+                key={id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, id)}
+                onDragOver={(e) => handleDragOver(e, id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, id)}
+                onDragEnd={handleDragEnd}
+                className={`relative transition-all duration-150 group/nav-item ${
+                  isDragging ? 'opacity-40 scale-[0.98]' : 'opacity-100'
+                }`}
               >
-                {({ ref, isFocused }) => (
-                  <button
-                    ref={ref}
-                    type="button"
-                    onClick={() => onNavigate('library', 'AVAILABLE')}
-                    className={`w-full flex items-center justify-center h-10 px-0 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-                      isLibraryActive && currentFilter === 'AVAILABLE'
-                        ? 'bg-sky-500 text-zinc-950 font-bold shadow-lg shadow-sky-500/20'
-                        : 'text-zinc-400 hover:text-sky-300 hover:bg-zinc-800/60'
-                    } ${isFocused ? 'controller-focus' : ''}`}
-                    title={`Available to Install (${gameCounts.available ?? 0})`}
-                  >
-                    <Download className="w-4 h-4 flex-shrink-0" />
-                  </button>
+                {/* Drop Indicator - Above */}
+                {isOver && dropPosition === 'before' && (
+                  <div className="absolute -top-1.5 left-2 right-2 h-1 bg-gradient-to-r from-teal-400 to-cyan-400 rounded-full shadow-lg shadow-teal-500/50 z-30 animate-pulse pointer-events-none" />
                 )}
-              </FocusableItem>
-            )}
 
-            {/* Library Sub-items (collapsible) */}
-            {!isCollapsed && isLibraryOpen && (
-              <div className="pl-4 space-y-1 border-l border-zinc-800/80 ml-4 pt-1 animate-in fade-in slide-in-from-top-1 duration-150">
-                {[
-                  {
-                    filter: 'INSTALLED' as LibraryFilter,
-                    label: 'Installed',
-                    count: gameCounts.installed ?? gameCounts.total,
-                    icon: HardDrive,
-                  },
-                  {
-                    filter: 'AVAILABLE' as LibraryFilter,
-                    label: 'Available to Install',
-                    count: gameCounts.available ?? 0,
-                    icon: Download,
-                    isSky: true,
-                  },
-                  {
-                    filter: 'ALL' as LibraryFilter,
-                    label: 'All Games',
-                    count: gameCounts.total,
-                    icon: Layers,
-                  },
-                  { filter: 'STEAM' as LibraryFilter, label: 'Steam', count: gameCounts.steam },
-                  { filter: 'EPIC' as LibraryFilter, label: 'Epic', count: gameCounts.epic },
-                  { filter: 'GOG' as LibraryFilter, label: 'GOG', count: gameCounts.gog },
-                  { filter: 'XBOX' as LibraryFilter, label: 'Xbox', count: gameCounts.xbox },
-                  { filter: 'UBISOFT' as LibraryFilter, label: 'Ubisoft', count: gameCounts.ubisoft },
-                  {
-                    filter: 'STANDALONE' as LibraryFilter,
-                    label: 'Standalone',
-                    count: gameCounts.standalone,
-                  },
-                ].map(({ filter, label, count, icon: ItemIcon, isSky }) => {
-                  const isActive = isLibraryActive && currentFilter === filter;
-                  return (
+                {/* Item Content: Library */}
+                {id === 'library' && (
+                  <div className="space-y-1">
                     <FocusableItem
-                      key={filter}
-                      id={`nav-filter-${filter.toLowerCase()}`}
+                      id="nav-library-main"
                       scope="sidebar"
                       group="nav"
-                      onConfirm={() => onNavigate('library', filter)}
+                      onConfirm={() => onNavigate('library', 'INSTALLED')}
                     >
                       {({ ref, isFocused }) => (
-                        <button
+                        <div
                           ref={ref}
-                          type="button"
-                          onClick={() => onNavigate('library', filter)}
-                          className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
-                            isActive
-                              ? isSky
-                                ? 'bg-sky-500/10 text-sky-300 font-semibold border-l-2 border-sky-400 pl-2.5'
-                                : 'bg-zinc-800 text-teal-300 font-semibold border-l-2 border-teal-400 pl-2.5'
-                              : isSky
-                              ? 'text-sky-400/80 hover:text-sky-200 hover:bg-sky-500/10'
+                          className={`w-full flex items-center ${
+                            isCollapsed ? 'justify-center h-10 px-0' : 'justify-between px-3 py-2'
+                          } rounded-xl text-xs font-bold uppercase tracking-wider transition-all select-none ${
+                            isLibraryActive
+                              ? 'text-teal-400 bg-teal-500/10 border border-teal-500/20'
                               : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
                           } ${isFocused ? 'controller-focus' : ''}`}
                         >
-                          <span className="flex items-center gap-2 truncate">
-                            {ItemIcon && (
-                              <ItemIcon
-                                className={`w-3.5 h-3.5 flex-shrink-0 ${
-                                  isSky ? 'text-sky-400' : 'text-zinc-400'
-                                }`}
-                              />
-                            )}
-                            <span className="truncate">{label}</span>
-                          </span>
-                          <span
-                            className={`text-[10px] font-mono ml-1.5 flex-shrink-0 ${
-                              isSky && (count ?? 0) > 0
-                                ? 'text-sky-400/90 font-bold bg-sky-500/10 px-1.5 py-0.2 rounded-full'
-                                : 'text-zinc-500'
+                          <button
+                            type="button"
+                            onClick={() => onNavigate('library', 'ALL')}
+                            className={`flex items-center ${
+                              isCollapsed ? 'justify-center w-full' : 'gap-2 flex-1 text-left min-w-0 cursor-pointer'
                             }`}
+                            title={`Library - All Games (${gameCounts.total}) (Drag to reorder)`}
                           >
-                            {count}
-                          </span>
-                        </button>
+                            {!isCollapsed && (
+                              <span title="Drag to reorder menu" className="inline-flex items-center">
+                                <GripVertical className="w-3.5 h-3.5 text-zinc-600 hover:text-zinc-300 cursor-grab active:cursor-grabbing flex-shrink-0 transition-colors" />
+                              </span>
+                            )}
+                            <Layers className="w-4 h-4 text-teal-400 flex-shrink-0" />
+                            {!isCollapsed && <span className="truncate">LIBRARY</span>}
+                          </button>
+
+                          {!isCollapsed && (
+                            <div className="flex items-center gap-1.5 flex-shrink-0 ml-1">
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300">
+                                {gameCounts.total}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleToggleLibrary}
+                                className="p-1 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                                title={isLibraryOpen ? 'Collapse library submenus' : 'Expand library submenus'}
+                              >
+                                <ChevronDown
+                                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                    isLibraryOpen ? 'rotate-0' : '-rotate-90'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </FocusableItem>
-                  );
-                })}
+
+                    {/* Library Sub-items (collapsible: platforms / launchers) */}
+                    {!isCollapsed && isLibraryOpen && (
+                      <div className="pl-4 space-y-1 border-l border-zinc-800/80 ml-4 pt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                        {[
+                          { filter: 'STEAM' as LibraryFilter, label: 'Steam', count: gameCounts.steam },
+                          { filter: 'EPIC' as LibraryFilter, label: 'Epic', count: gameCounts.epic },
+                          { filter: 'GOG' as LibraryFilter, label: 'GOG', count: gameCounts.gog },
+                          { filter: 'XBOX' as LibraryFilter, label: 'Xbox', count: gameCounts.xbox },
+                          { filter: 'UBISOFT' as LibraryFilter, label: 'Ubisoft', count: gameCounts.ubisoft },
+                          {
+                            filter: 'STANDALONE' as LibraryFilter,
+                            label: 'Standalone',
+                            count: gameCounts.standalone,
+                          },
+                        ].map(({ filter, label, count }) => {
+                          const isActive = isLibraryActive && currentFilter === filter;
+                          return (
+                            <FocusableItem
+                              key={filter}
+                              id={`nav-filter-${filter.toLowerCase()}`}
+                              scope="sidebar"
+                              group="nav"
+                              onConfirm={() => onNavigate('library', filter)}
+                            >
+                              {({ ref, isFocused }) => (
+                                <button
+                                  ref={ref}
+                                  type="button"
+                                  onClick={() => onNavigate('library', filter)}
+                                  className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                                    isActive
+                                      ? 'bg-zinc-800 text-teal-300 font-semibold border-l-2 border-teal-400 pl-2.5'
+                                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
+                                  } ${isFocused ? 'controller-focus' : ''}`}
+                                >
+                                  <span className="truncate font-medium">{label}</span>
+                                  <span className="text-[10px] font-mono ml-1.5 flex-shrink-0 text-zinc-500">
+                                    {count}
+                                  </span>
+                                </button>
+                              )}
+                            </FocusableItem>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Item Content: Favorites */}
+                {id === 'favorites' && (
+                  <FocusableItem
+                    id="nav-favorites"
+                    scope="sidebar"
+                    group="nav"
+                    onConfirm={() => onNavigate('favorites')}
+                  >
+                    {({ ref, isFocused }) => (
+                      <button
+                        ref={ref}
+                        type="button"
+                        onClick={() => onNavigate('favorites')}
+                        className={`w-full flex items-center ${
+                          isCollapsed ? 'justify-center h-10 px-0' : 'justify-between px-3.5 py-2.5'
+                        } rounded-xl text-sm font-semibold transition-all ${
+                          currentPage === 'favorites'
+                            ? 'bg-teal-500 text-zinc-950 font-bold shadow-lg shadow-teal-500/20'
+                            : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
+                        } ${isFocused ? 'controller-focus' : ''}`}
+                        title={`Favorites (${gameCounts.favorites}) (Drag to reorder)`}
+                      >
+                        <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-2.5'}`}>
+                          {!isCollapsed && (
+                            <span title="Drag to reorder menu" className="inline-flex items-center">
+                              <GripVertical className="w-3.5 h-3.5 text-zinc-600 hover:text-zinc-300 cursor-grab active:cursor-grabbing flex-shrink-0 transition-colors" />
+                            </span>
+                          )}
+                          <Star className="w-4 h-4 flex-shrink-0" />
+                          {!isCollapsed && <span>FAVORITES</span>}
+                        </div>
+                        {!isCollapsed && (
+                          <span
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+                              currentPage === 'favorites'
+                                ? 'bg-zinc-900 text-teal-300'
+                                : 'bg-zinc-800 text-zinc-400'
+                            }`}
+                          >
+                            {gameCounts.favorites}
+                          </span>
+                        )}
+                      </button>
+                    )}
+                  </FocusableItem>
+                )}
+
+                {/* Item Content: Recently Played */}
+                {id === 'recently-played' && (
+                  <FocusableItem
+                    id="nav-recently-played"
+                    scope="sidebar"
+                    group="nav"
+                    onConfirm={() => onNavigate('recently-played')}
+                  >
+                    {({ ref, isFocused }) => (
+                      <button
+                        ref={ref}
+                        type="button"
+                        onClick={() => onNavigate('recently-played')}
+                        className={`w-full flex items-center ${
+                          isCollapsed ? 'justify-center h-10 px-0' : 'justify-between px-3.5 py-2.5'
+                        } rounded-xl text-sm font-semibold transition-all ${
+                          currentPage === 'recently-played'
+                            ? 'bg-teal-500 text-zinc-950 font-bold shadow-lg shadow-teal-500/20'
+                            : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
+                        } ${isFocused ? 'controller-focus' : ''}`}
+                        title="Recently Played (Drag to reorder)"
+                      >
+                        <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-2.5'}`}>
+                          {!isCollapsed && (
+                            <span title="Drag to reorder menu" className="inline-flex items-center">
+                              <GripVertical className="w-3.5 h-3.5 text-zinc-600 hover:text-zinc-300 cursor-grab active:cursor-grabbing flex-shrink-0 transition-colors" />
+                            </span>
+                          )}
+                          <Clock className="w-4 h-4 flex-shrink-0" />
+                          {!isCollapsed && <span>RECENTLY PLAYED</span>}
+                        </div>
+                      </button>
+                    )}
+                  </FocusableItem>
+                )}
+
+                {/* Drop Indicator - Below */}
+                {isOver && dropPosition === 'after' && (
+                  <div className="absolute -bottom-1.5 left-2 right-2 h-1 bg-gradient-to-r from-teal-400 to-cyan-400 rounded-full shadow-lg shadow-teal-500/50 z-30 animate-pulse pointer-events-none" />
+                )}
               </div>
-            )}
-          </div>
-
-          {/* FAVORITES */}
-          <div>
-            <FocusableItem
-              id="nav-favorites"
-              scope="sidebar"
-              group="nav"
-              onConfirm={() => onNavigate('favorites')}
-            >
-              {({ ref, isFocused }) => (
-                <button
-                  ref={ref}
-                  type="button"
-                  onClick={() => onNavigate('favorites')}
-                  className={`w-full flex items-center ${
-                    isCollapsed ? 'justify-center h-10 px-0' : 'justify-between px-3.5 py-2.5'
-                  } rounded-xl text-sm font-semibold transition-all ${
-                    currentPage === 'favorites'
-                      ? 'bg-teal-500 text-zinc-950 font-bold shadow-lg shadow-teal-500/20'
-                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
-                  } ${isFocused ? 'controller-focus' : ''}`}
-                  title={`Favorites (${gameCounts.favorites})`}
-                >
-                  <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-                    <Star className="w-4 h-4 flex-shrink-0" />
-                    {!isCollapsed && <span>FAVORITES</span>}
-                  </div>
-                  {!isCollapsed && (
-                    <span
-                      className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-                        currentPage === 'favorites'
-                          ? 'bg-zinc-900 text-teal-300'
-                          : 'bg-zinc-800 text-zinc-400'
-                      }`}
-                    >
-                      {gameCounts.favorites}
-                    </span>
-                  )}
-                </button>
-              )}
-            </FocusableItem>
-          </div>
-
-          {/* RECENTLY PLAYED */}
-          <div>
-            <FocusableItem
-              id="nav-recently-played"
-              scope="sidebar"
-              group="nav"
-              onConfirm={() => onNavigate('recently-played')}
-            >
-              {({ ref, isFocused }) => (
-                <button
-                  ref={ref}
-                  type="button"
-                  onClick={() => onNavigate('recently-played')}
-                  className={`w-full flex items-center ${
-                    isCollapsed ? 'justify-center h-10 px-0' : 'justify-between px-3.5 py-2.5'
-                  } rounded-xl text-sm font-semibold transition-all ${
-                    currentPage === 'recently-played'
-                      ? 'bg-teal-500 text-zinc-950 font-bold shadow-lg shadow-teal-500/20'
-                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
-                  } ${isFocused ? 'controller-focus' : ''}`}
-                  title="Recently Played"
-                >
-                  <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-                    <Clock className="w-4 h-4 flex-shrink-0" />
-                    {!isCollapsed && <span>RECENTLY PLAYED</span>}
-                  </div>
-                </button>
-              )}
-            </FocusableItem>
-          </div>
-
-          {/* DRIVES */}
-          <div>
-            <FocusableItem
-              id="nav-drives"
-              scope="sidebar"
-              group="nav"
-              onConfirm={() => onNavigate('drives')}
-            >
-              {({ ref, isFocused }) => (
-                <button
-                  ref={ref}
-                  type="button"
-                  onClick={() => onNavigate('drives')}
-                  className={`w-full flex items-center ${
-                    isCollapsed ? 'justify-center h-10 px-0' : 'justify-between px-3.5 py-2.5'
-                  } rounded-xl text-sm font-semibold transition-all ${
-                    currentPage === 'drives'
-                      ? 'bg-teal-500 text-zinc-950 font-bold shadow-lg shadow-teal-500/20'
-                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
-                  } ${isFocused ? 'controller-focus' : ''}`}
-                  title="Drives"
-                >
-                  <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-                    <HardDrive className="w-4 h-4 flex-shrink-0" />
-                    {!isCollapsed && <span>DRIVES</span>}
-                  </div>
-                </button>
-              )}
-            </FocusableItem>
-          </div>
-
-          {/* HELP & DOCS */}
-          <div>
-            <FocusableItem
-              id="nav-help"
-              scope="sidebar"
-              group="nav"
-              onConfirm={() => onNavigate('help')}
-            >
-              {({ ref, isFocused }) => (
-                <button
-                  ref={ref}
-                  type="button"
-                  onClick={() => onNavigate('help')}
-                  className={`w-full flex items-center ${
-                    isCollapsed ? 'justify-center h-10 px-0' : 'justify-between px-3.5 py-2.5'
-                  } rounded-xl text-sm font-semibold transition-all ${
-                    currentPage === 'help'
-                      ? 'bg-teal-500 text-zinc-950 font-bold shadow-lg shadow-teal-500/20'
-                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
-                  } ${isFocused ? 'controller-focus' : ''}`}
-                  title="Help & Documentation"
-                >
-                  <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-                    <BookOpen className="w-4 h-4 flex-shrink-0" />
-                    {!isCollapsed && <span>HELP &amp; DOCS</span>}
-                  </div>
-                </button>
-              )}
-            </FocusableItem>
-          </div>
+            );
+          })}
 
           {/* FAMILY & LAUNCHER ACCOUNTS */}
           <div className="pt-3 border-t border-zinc-800/80">

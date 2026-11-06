@@ -23,6 +23,7 @@ export class SteamDetector implements GameDetector {
 
   private primarySteamPath: string | null = null;
   private playtimeMap = new Map<string, { playtimeSeconds: number; lastPlayedAt?: string }>();
+  private officialInstalledAppIds = new Set<string>();
   public readonly metadataService: SteamMetadataService;
 
   constructor(private driveService?: DriveService, metadataService?: SteamMetadataService) {
@@ -40,6 +41,7 @@ export class SteamDetector implements GameDetector {
   ): Promise<GameCandidate[]> {
     const candidates: GameCandidate[] = [];
     const seenAppIds = new Set<string>();
+    this.officialInstalledAppIds.clear();
 
     onProgress?.({ message: 'Locating Steam libraries across all storage drives...' });
 
@@ -162,33 +164,37 @@ export class SteamDetector implements GameDetector {
     }
 
     // 2. Scan all active Windows drives for SteamLibrary or Steam directories
-    try {
-      const drives = this.driveService
-        ? await this.driveService.getAvailableDrives()
-        : 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((c) => ({ mountPath: `${c}:\\`, isIncluded: true }));
+    // If libraryfolders.vdf was found in the primary Steam installation, it already lists all registered libraries.
+    // Only perform heuristic drive scan if no external libraries were discovered from libraryfolders.vdf.
+    if (libraryPaths.size <= 1) {
+      try {
+        const drives = this.driveService
+          ? await this.driveService.getAvailableDrives()
+          : 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((c) => ({ mountPath: `${c}:\\`, isIncluded: true }));
 
-      for (const drive of drives) {
-        if (!drive.isIncluded) continue;
+        for (const drive of drives) {
+          if (!drive.isIncluded) continue;
 
-        const candidatesOnDrive = [
-          path.join(drive.mountPath, 'SteamLibrary'),
-          path.join(drive.mountPath, 'Steam'),
-          path.join(drive.mountPath, 'Program Files (x86)', 'Steam'),
-          path.join(drive.mountPath, 'Games', 'SteamLibrary'),
-        ];
+          const candidatesOnDrive = [
+            path.join(drive.mountPath, 'SteamLibrary'),
+            path.join(drive.mountPath, 'Steam'),
+            path.join(drive.mountPath, 'Program Files (x86)', 'Steam'),
+            path.join(drive.mountPath, 'Games', 'SteamLibrary'),
+          ];
 
-        for (const dir of candidatesOnDrive) {
-          if (fs.existsSync(dir)) {
-            libraryPaths.add(this.normalizeLibraryPath(dir));
-            const vdf = path.join(dir, 'steamapps', 'libraryfolders.vdf');
-            if (fs.existsSync(vdf)) {
-              this.parseLibraryFoldersVdf(vdf, libraryPaths);
+          for (const dir of candidatesOnDrive) {
+            if (fs.existsSync(dir)) {
+              const vdf = path.join(dir, 'steamapps', 'libraryfolders.vdf');
+              if (fs.existsSync(vdf)) {
+                libraryPaths.add(this.normalizeLibraryPath(dir));
+                this.parseLibraryFoldersVdf(vdf, libraryPaths);
+              }
             }
           }
         }
+      } catch (err: any) {
+        console.warn('[SteamDetector] Drive inspection error:', err.message);
       }
-    } catch (err: any) {
-      console.warn('[SteamDetector] Drive inspection error:', err.message);
     }
 
     return Array.from(libraryPaths);
@@ -238,6 +244,15 @@ export class SteamDetector implements GameDetector {
           pathsSet.add(this.normalizeLibraryPath(rawPath));
         }
       }
+
+      // Collect officially installed app IDs from this libraryfolders.vdf
+      const appMatches = content.matchAll(/"apps"\s*\{([^}]*)\}/gi);
+      for (const appBlock of appMatches) {
+        const idMatches = appBlock[1].matchAll(/"(\d+)"\s+"(\d+)"/g);
+        for (const idMatch of idMatches) {
+          this.officialInstalledAppIds.add(idMatch[1]);
+        }
+      }
     } catch (err: any) {
       console.warn(`[SteamDetector] Failed reading "${vdfPath}":`, err.message);
     }
@@ -254,9 +269,14 @@ export class SteamDetector implements GameDetector {
     const installdir = this.extractValue(content, 'installdir');
     const sizeOnDisk = parseInt(this.extractValue(content, 'SizeOnDisk') || '0', 10);
     const lastPlayedUnix = parseInt(this.extractValue(content, 'LastPlayed') || '0', 10);
+    const lastOwner = this.extractValue(content, 'LastOwner');
 
     if (!appid || !name || !installdir) return null;
     if (this.ignoredAppIds.has(appid)) return null;
+
+    // NOTE: libraryfolders.vdf is only rewritten by Steam lazily (often on exit), so a game that was
+    // just installed has an appmanifest but is not yet listed there. Do NOT use that list to reject
+    // games; the appmanifest plus an existing install directory (checked below) is authoritative.
 
     // Ignore dedicated servers / background tools
     const lowerName = name.toLowerCase();
@@ -304,6 +324,7 @@ export class SteamDetector implements GameDetector {
       releaseDate: cachedMeta?.releaseDate,
       metadata: {
         lastPlayedUnix,
+        lastOwner: lastOwner || undefined,
         manifestPath,
         playtimeSeconds: totalPlayTime,
       },

@@ -67,7 +67,7 @@ export const Help: React.FC<HelpProps> = ({ onNavigate, onOpenAccounts }) => {
                 When Do You Actually Need a Steam Web API Key?
               </h4>
               <p className="text-zinc-400 text-xs">
-                Most users <strong className="text-zinc-200">do not need</strong> an API key. GameHub is built to work offline and locally:
+                Most users <strong className="text-zinc-200">do not need</strong> an API key. OmniPlay is built to work offline and locally:
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                 <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1.5">
@@ -179,10 +179,10 @@ export const Help: React.FC<HelpProps> = ({ onNavigate, onOpenAccounts }) => {
                     <span className="w-5 h-5 rounded-full bg-teal-500/20 text-teal-300 flex items-center justify-center text-[10px]">
                       3
                     </span>
-                    <span>Paste Key into GameHub Settings</span>
+                    <span>Paste Key into OmniPlay Settings</span>
                   </div>
                   <p className="text-xs text-zinc-400 pl-7">
-                    Valve will give you a 32-character hexadecimal key (e.g. <code className="text-zinc-300 font-mono">XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</code>). Copy it, return to GameHub <strong>Settings &gt; Library &gt; Steam Integration</strong>, and click <strong>Save Key</strong>.
+                    Valve will give you a 32-character hexadecimal key (e.g. <code className="text-zinc-300 font-mono">XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</code>). Copy it, return to OmniPlay <strong>Settings &gt; Library &gt; Steam Integration</strong>, and click <strong>Save Key</strong>.
                   </p>
                   <div className="pl-7 pt-1">
                     <button
@@ -206,13 +206,13 @@ export const Help: React.FC<HelpProps> = ({ onNavigate, onOpenAccounts }) => {
               </h4>
               <ul className="text-xs text-zinc-400 space-y-1.5">
                 <li>
-                  • <strong className="text-zinc-200">Zero Passwords:</strong> GameHub never prompts for or stores your Steam password or 2FA Steam Guard codes.
+                  • <strong className="text-zinc-200">Zero Passwords:</strong> OmniPlay never prompts for or stores your Steam password or 2FA Steam Guard codes.
                 </li>
                 <li>
                   • <strong className="text-zinc-200">Read-Only Permission:</strong> The Steam Web API key is strictly read-only for public library lists. It cannot make purchases, trade inventory items, or alter your account.
                 </li>
                 <li>
-                  • <strong className="text-zinc-200">Browser Isolation:</strong> Key generation occurs in your external default browser (Chrome / Edge / Firefox) completely sandboxed away from GameHub.
+                  • <strong className="text-zinc-200">Browser Isolation:</strong> Key generation occurs in your external default browser (Chrome / Edge / Firefox) completely sandboxed away from OmniPlay.
                 </li>
               </ul>
             </div>
@@ -225,11 +225,11 @@ export const Help: React.FC<HelpProps> = ({ onNavigate, onOpenAccounts }) => {
         category: 'Overview & Basics',
         icon: Sparkles,
         summary:
-          'How GameHub automatically finds games across Steam, Epic, Xbox, GOG, and custom drives.',
+          'How OmniPlay automatically finds games across Steam, Epic, Xbox, GOG, and custom drives.',
         content: (
           <div className="space-y-5 text-sm text-zinc-300 leading-relaxed">
             <p className="text-zinc-400 text-xs">
-              GameHub is a unified desktop game launcher shell designed to aggregate all your PC games into one lightning-fast, beautiful library with zero configuration.
+              OmniPlay is a unified desktop game launcher shell designed to aggregate all your PC games into one lightning-fast, beautiful library with zero configuration.
             </p>
 
             <div className="space-y-3">
@@ -283,11 +283,11 @@ export const Help: React.FC<HelpProps> = ({ onNavigate, onOpenAccounts }) => {
         category: 'Integrations & Accounts',
         icon: Users,
         summary:
-          'How GameHub credits games to their true owners, filters libraries, and resolves shared titles.',
+          'How OmniPlay credits games to their true owners, filters libraries, and resolves shared titles.',
         content: (
           <div className="space-y-5 text-sm text-zinc-300 leading-relaxed">
             <p className="text-zinc-400 text-xs">
-              If your PC is shared between family members or you borrow libraries from friends (such as Steam Family Sharing), GameHub automatically distinguishes who owns which game.
+              If your PC is shared between family members or you borrow libraries from friends (such as Steam Family Sharing), OmniPlay automatically distinguishes who owns which game.
             </p>
 
             <div className="space-y-3">
@@ -337,7 +337,7 @@ export const Help: React.FC<HelpProps> = ({ onNavigate, onOpenAccounts }) => {
         content: (
           <div className="space-y-5 text-sm text-zinc-300 leading-relaxed">
             <p className="text-zinc-400 text-xs">
-              GameHub has native 10-foot controller support optimized for handhelds (Steam Deck, ROG Ally, Legion Go) and TV living-room setups.
+              OmniPlay has native 10-foot controller support optimized for handhelds (Steam Deck, ROG Ally, Legion Go) and TV living-room setups.
             </p>
 
             <div className="space-y-3">
@@ -412,14 +412,14 @@ export const Help: React.FC<HelpProps> = ({ onNavigate, onOpenAccounts }) => {
         content: (
           <div className="space-y-5 text-sm text-zinc-300 leading-relaxed">
             <p className="text-zinc-400 text-xs">
-              If you store games on external SSDs, USB hard drives, or microSD cards, GameHub automatically tracks which drive each game lives on.
+              If you store games on external SSDs, USB hard drives, or microSD cards, OmniPlay automatically tracks which drive each game lives on.
             </p>
 
             <div className="space-y-3">
               <h4 className="font-bold text-zinc-100 text-sm">Removable Drives &amp; Missing Tab</h4>
               <div className="p-4 rounded-xl bg-surface-850 border border-zinc-800 space-y-2 text-xs text-zinc-400">
                 <p>
-                  When you unplug an external drive, GameHub does <strong>not</strong> delete your playtime or metadata. Instead, the games are marked as <strong>&quot;Missing / Moved&quot;</strong> and grouped under an amber badge.
+                  When you unplug an external drive, OmniPlay does <strong>not</strong> delete your playtime or metadata. Instead, the games are marked as <strong>&quot;Missing / Moved&quot;</strong> and grouped under an amber badge.
                 </p>
                 <p>
                   As soon as you reconnect the drive, click <strong>Rescan</strong> and all games instantly return to active status.
@@ -430,7 +430,7 @@ export const Help: React.FC<HelpProps> = ({ onNavigate, onOpenAccounts }) => {
             <div className="space-y-3">
               <h4 className="font-bold text-zinc-100 text-sm">Relocating a Game Manually</h4>
               <p className="text-xs text-zinc-400">
-                If you manually moved a standalone or DRM-free game to a new directory, right-click the card (or click the three dots menu <code className="text-zinc-300 font-mono">⋮</code>) and select <strong>&quot;Locate Executable&quot;</strong> to point GameHub to the new file path.
+                If you manually moved a standalone or DRM-free game to a new directory, right-click the card (or click the three dots menu <code className="text-zinc-300 font-mono">⋮</code>) and select <strong>&quot;Locate Executable&quot;</strong> to point OmniPlay to the new file path.
               </p>
             </div>
           </div>
@@ -460,7 +460,7 @@ export const Help: React.FC<HelpProps> = ({ onNavigate, onOpenAccounts }) => {
                   How do I add games from itch.io, emulators, or custom installers?
                 </h5>
                 <p className="text-zinc-400 text-xs">
-                  Click the <strong>+ Add Game</strong> button in the top bar. You can browse and select any <code className="text-zinc-300 font-mono">.exe</code> file on your computer. GameHub will automatically generate clean artwork and metadata for it.
+                  Click the <strong>+ Add Game</strong> button in the top bar. You can browse and select any <code className="text-zinc-300 font-mono">.exe</code> file on your computer. OmniPlay will automatically generate clean artwork and metadata for it.
                 </p>
               </div>
 
@@ -486,6 +486,16 @@ export const Help: React.FC<HelpProps> = ({ onNavigate, onOpenAccounts }) => {
                   <li><strong>Recovering after a crash:</strong> If your PC loses power or shuts down abruptly, click &quot;Repair &amp; Optimize Database&quot; to restore indexes and speed up searches.</li>
                   <li><strong>Troubleshooting errors:</strong> View <code className="text-zinc-300 font-mono">gamehub.log</code> to inspect launch errors or integration logs.</li>
                 </ul>
+              </div>
+
+              <div className="p-4 rounded-xl bg-surface-850 border border-teal-500/30 space-y-1.5">
+                <h5 className="font-bold text-teal-300 text-xs flex items-center gap-1.5">
+                  <RefreshCw className="w-3.5 h-3.5 text-teal-400" />
+                  <span>How do I clear the cache and do a fresh rescan?</span>
+                </h5>
+                <p className="text-zinc-400 text-xs leading-relaxed">
+                  If you bought new games, or updated cover artwork that isn&apos;t appearing immediately, click the arrow (<span className="text-teal-400 font-mono">▾</span>) next to the <strong className="text-zinc-200">Rescan</strong> button in the top bar, then click <strong className="text-teal-300">&quot;Clear Cache &amp; Rescan&quot;</strong>.
+                </p>
               </div>
             </div>
           </div>
@@ -515,7 +525,7 @@ export const Help: React.FC<HelpProps> = ({ onNavigate, onOpenAccounts }) => {
   }, [sections, activeSectionId, filteredSections]);
 
   return (
-    <div className="space-y-6 pb-12 max-w-6xl mx-auto">
+    <div className="space-y-6 pb-12 pt-6 max-w-6xl mx-auto">
       {/* Header Banner */}
       <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-teal-500/10 via-surface-850 to-surface-850 border border-zinc-800 shadow-xl space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

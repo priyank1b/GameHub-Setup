@@ -26,9 +26,9 @@ export function useFocusable<T extends HTMLElement = HTMLDivElement>({
   onBack,
   disabled = false,
 }: UseFocusableOptions) {
-  const { focusedId, registerFocusable, setFocus } = useNavigation();
+  const { focusedId, focusMode, registerFocusable, setFocus } = useNavigation();
   const ref = useRef<T>(null);
-  const isFocused = focusedId === id;
+  const isFocused = focusMode === 'controller' && focusedId === id;
 
   // Keep latest callbacks in ref to avoid re-registering on every render
   const callbacksRef = useRef({ onConfirm, onSecondary, onMenu, onBack });

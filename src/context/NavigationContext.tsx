@@ -35,6 +35,8 @@ const NavigationContext = createContext<NavigationContextType | null>(null);
 export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [focusMode, setFocusMode] = useState<'controller' | 'mouse'>('mouse');
+  const focusModeRef = useRef<'controller' | 'mouse'>('mouse');
+  focusModeRef.current = focusMode;
   const [controllerInfo, setControllerInfo] = useState<GamepadInfo | null>(null);
   const [isControllerEnabled, setIsControllerEnabled] = useState<boolean>(true);
 
@@ -57,8 +59,8 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const registerFocusable = useCallback((element: FocusableElement) => {
     elementsRef.current.set(element.id, element);
 
-    // Auto-focus first visible game-card or hero item if nothing is focused yet in main scope
-    if (!focusedIdRef.current && modalStackRef.current.length === 0) {
+    // Auto-focus first visible game-card or hero item ONLY IF controller mode is active
+    if (focusModeRef.current === 'controller' && !focusedIdRef.current && modalStackRef.current.length === 0) {
       if (element.id.startsWith('game-card-') || element.id.startsWith('hero-resume-game')) {
         focusedIdRef.current = element.id;
         setFocusedId(element.id);
@@ -422,6 +424,11 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (dist > 12) {
         lastMousePos = { x: e.clientX, y: e.clientY };
         setFocusMode('mouse');
+        focusModeRef.current = 'mouse';
+        if (focusedIdRef.current !== null) {
+          focusedIdRef.current = null;
+          setFocusedId(null);
+        }
       }
     };
     window.addEventListener('mousemove', handleMouseMove, { passive: true });

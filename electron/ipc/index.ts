@@ -26,14 +26,14 @@ export function registerAllIpcHandlers(db: Database): void {
   const settingsRepo = new SettingsRepository(db);
   const canonicalRepo = new CanonicalGameRepository(db);
   const driveService = new DriveService();
-  const gameLauncher = new GameLauncher(gameRepo, launchRepo);
+  const gameLauncher = new GameLauncher(gameRepo, launchRepo, canonicalRepo);
   const accountService = new LauncherAccountService(db);
 
   registerGameHandlers(gameRepo, launchRepo, gameLauncher, canonicalRepo, accountService);
   registerSettingsHandlers(settingsRepo);
   registerDriveHandlers(driveService, settingsRepo);
   registerDialogHandlers();
-  registerScannerHandlers(gameRepo, settingsRepo, driveService);
+  registerScannerHandlers(gameRepo, settingsRepo, driveService, db);
   registerBackupHandlers(gameRepo, categoryRepo, settingsRepo);
   registerWindowHandlers(settingsRepo);
   registerAccountHandlers(accountService, canonicalRepo);

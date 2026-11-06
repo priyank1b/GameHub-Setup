@@ -1,5 +1,5 @@
-appId: com.gamehub.launcher
-productName: GameHub
+appId: com.omniplay.launcher
+productName: OmniPlay
 directories:
   output: release
   buildResources: assets
@@ -27,11 +27,20 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: GameHub
+  shortcutName: OmniPlay
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
   installerHeaderIcon: assets/icon.ico
-  artifactName: "GameHub-Setup.exe"
+  artifactName: "OmniPlay-Setup.exe"
   uninstallDisplayName: "${productName}"
   deleteAppDataOnUninstall: false
   include: build/installer.nsh
+
+appx:
+  applicationId: OmniPlay
+  displayName: "OmniPlay"
+  identityName: "PriyankBhatt.OmniPlay"
+  publisher: "CN=617F1400-0C02-4F7A-A289-8C7A11ED006C"
+  publisherDisplayName: "Priyank Bhatt"
+  backgroundColor: "#0d0f12"
+  showNameOnTiles: true

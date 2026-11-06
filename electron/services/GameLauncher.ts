@@ -6,6 +6,7 @@ const { shell } = electron;
 import { Game } from '../../src/types/Game';
 import { LaunchRepository } from '../database/repositories/LaunchRepository';
 import { GameRepository } from '../database/repositories/GameRepository';
+import { CanonicalGameRepository } from '../database/repositories/CanonicalGameRepository';
 
 export interface LaunchResult {
   success: boolean;
@@ -17,11 +18,54 @@ export interface LaunchResult {
 export class GameLauncher {
   constructor(
     private gameRepo: GameRepository,
-    private launchRepo: LaunchRepository
+    private launchRepo: LaunchRepository,
+    private canonicalRepo?: CanonicalGameRepository
   ) {}
 
   public async launch(gameId: number): Promise<LaunchResult> {
-    const game = this.gameRepo.getById(gameId);
+    let game = this.gameRepo.getById(gameId);
+    if (!game && this.canonicalRepo) {
+      const cg = this.canonicalRepo.getById(gameId);
+      if (cg) {
+        const primaryInstall =
+          cg.installations.find((i) => i.status === 'INSTALLED' && i.installPath && fs.existsSync(i.installPath)) ||
+          cg.installations.find((i) => i.status === 'INSTALLED') ||
+          cg.installations[0];
+        const primaryOwnership = cg.ownerships[0];
+
+        game = {
+          id: cg.id,
+          name: cg.title,
+          normalizedName: cg.normalizedTitle,
+          coverImage: cg.coverImage,
+          backgroundImage: cg.backgroundImage,
+          iconPath: cg.iconPath,
+          description: cg.description,
+          developer: cg.developer,
+          publisher: cg.publisher,
+          genre: cg.genre,
+          releaseDate: cg.releaseDate,
+          isFavorite: cg.isFavorite,
+          isInstalled: cg.status === 'INSTALLED',
+          isManual: false,
+          isHidden: cg.isHidden,
+          lastPlayedAt: cg.lastPlayedAt,
+          totalPlayTime: cg.totalPlayTime,
+          launcher: primaryInstall?.launcher || primaryOwnership?.launcher || 'UNKNOWN',
+          launcherAppId: primaryOwnership?.externalGameId || (primaryInstall as any)?.launcherAppId,
+          installPath: primaryInstall?.installPath,
+          executablePath: primaryInstall?.executablePath,
+          installedSize: primaryInstall?.installSizeBytes || 0,
+          installSizeBytes: primaryInstall?.installSizeBytes || 0,
+          installSizeStatus: primaryInstall?.installSizeStatus || 'UNKNOWN',
+          installSizeSource: primaryInstall?.installSizeSource || 'unknown',
+          drive: primaryInstall?.installPath ? primaryInstall.installPath.slice(0, 2).toUpperCase() : undefined,
+          createdAt: cg.createdAt,
+          updatedAt: cg.updatedAt,
+        } as Game;
+      }
+    }
+
     if (!game) {
       return { success: false, error: `Game with ID ${gameId} not found in database.` };
     }
@@ -126,16 +170,69 @@ export class GameLauncher {
   }
 
   public async openFolder(gameId: number): Promise<boolean> {
-    const game = this.gameRepo.getById(gameId);
-    if (!game) return false;
+    let targetPath: string | null | undefined = null;
 
-    const targetPath = game.installPath || (game.executablePath ? path.dirname(game.executablePath) : null);
-    if (!targetPath || !fs.existsSync(targetPath)) return false;
+    // 1. Try resolving via CanonicalGameRepository
+    if (this.canonicalRepo) {
+      try {
+        const cg = this.canonicalRepo.getById(gameId);
+        if (cg) {
+          const installedOnDisk =
+            cg.installations.find((i) => i.installPath && fs.existsSync(i.installPath)) ||
+            cg.installations.find((i) => i.executablePath && fs.existsSync(i.executablePath));
+          if (installedOnDisk) {
+            targetPath = installedOnDisk.installPath || (installedOnDisk.executablePath ? path.dirname(installedOnDisk.executablePath) : null);
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[GameLauncher] Error checking canonicalRepo for openFolder (${gameId}):`, err.message);
+      }
+    }
+
+    // 2. Fall back to legacy GameRepository
+    if (!targetPath) {
+      const game = this.gameRepo.getById(gameId);
+      if (game) {
+        targetPath = game.installPath || (game.executablePath ? path.dirname(game.executablePath) : null);
+      }
+    }
+
+    // 3. Fall back: search by canonical title or normalized title if id was canonical but gameRepo has different id
+    if (!targetPath && this.canonicalRepo) {
+      try {
+        const cg = this.canonicalRepo.getById(gameId);
+        if (cg) {
+          const allGames = this.gameRepo.getAll();
+          const legacyMatch = allGames.find(
+            (g) => g.name.toLowerCase() === cg.title.toLowerCase() || g.normalizedName === cg.normalizedTitle
+          );
+          if (legacyMatch) {
+            targetPath = legacyMatch.installPath || (legacyMatch.executablePath ? path.dirname(legacyMatch.executablePath) : null);
+          }
+        }
+      } catch {}
+    }
+
+    if (!targetPath || !fs.existsSync(targetPath)) {
+      console.warn(`[GameLauncher] openFolder failed: target path not found or does not exist for gameId ${gameId}:`, targetPath);
+      return false;
+    }
 
     try {
-      const errorMsg = await shell.openPath(targetPath);
-      return !errorMsg;
-    } catch {
+      const stat = fs.statSync(targetPath);
+      if (stat.isDirectory()) {
+        const errorMsg = await shell.openPath(targetPath);
+        if (errorMsg) {
+          console.warn(`[GameLauncher] shell.openPath returned: "${errorMsg}", trying showItemInFolder`);
+          shell.showItemInFolder(targetPath);
+        }
+        return true;
+      } else {
+        shell.showItemInFolder(targetPath);
+        return true;
+      }
+    } catch (err: any) {
+      console.error(`[GameLauncher] Failed to open folder for game ${gameId}:`, err.message);
       return false;
     }
   }

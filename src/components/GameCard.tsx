@@ -245,7 +245,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
       ref={focusRef}
       tabIndex={0}
       role="button"
-      style={{ contentVisibility: 'auto', containIntrinsicSize: '200px 300px' }}
+      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 260px' }}
       aria-label={`${game.name} (${game.launcher})`}
       onClick={() => onClick?.(game)}
       onKeyDown={(e) => {

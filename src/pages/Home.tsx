@@ -10,6 +10,11 @@ import {
   FolderSearch,
   Download,
   HardDrive,
+  RefreshCw,
+  CheckCircle2,
+  ShieldCheck,
+  Gamepad2,
+  Users,
 } from 'lucide-react';
 import { PageRoute, LibraryFilter } from '../types/Navigation';
 import { FocusableItem } from '../components/FocusableItem';
@@ -26,6 +31,9 @@ interface HomeProps {
   onLocate?: (game: Game) => void;
   onRemove?: (game: Game) => void;
   onHide?: (game: Game) => void;
+  onRescan?: () => void;
+  isScanning?: boolean;
+  onOpenAccounts?: () => void;
 }
 
 export const Home: React.FC<HomeProps> = ({
@@ -39,6 +47,9 @@ export const Home: React.FC<HomeProps> = ({
   onLocate,
   onRemove,
   onHide,
+  onRescan,
+  isScanning = false,
+  onOpenAccounts,
 }) => {
   // Default to INSTALLED so user sees ready-to-play games first
   const [homeFilter, setHomeFilter] = useState<'INSTALLED' | 'AVAILABLE' | 'ALL'>('INSTALLED');
@@ -89,7 +100,7 @@ export const Home: React.FC<HomeProps> = ({
   }, [games]);
 
   return (
-    <div className="space-y-10 pb-12">
+    <div className="space-y-10 pb-12 pt-6">
       {/* Hero Banner with Featured / Last Played Title */}
       {featuredGame && (
         <div className="relative rounded-3xl overflow-hidden border border-zinc-800 bg-surface-850 shadow-2xl">
@@ -209,14 +220,104 @@ export const Home: React.FC<HomeProps> = ({
         </div>
       )}
 
-      {/* Recently Played Section */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5 text-teal-400" />
-            <h2 className="text-xl font-bold text-white font-['Outfit']">Recently Played</h2>
+      {/* Onboarding Welcome Hero for First-Time Users (when library has 0 games) */}
+      {!featuredGame && (
+        <div className="relative rounded-3xl overflow-hidden border border-teal-500/30 bg-gradient-to-br from-surface-850 via-surface-900 to-surface-850 shadow-2xl p-8 sm:p-12">
+          {/* Subtle glowing ambient backdrop */}
+          <div className="absolute -top-32 -right-32 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 max-w-3xl space-y-6">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-bold tracking-wider uppercase">
+              <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+              <span>Welcome to OmniPlay • First-Time Setup</span>
+            </div>
+
+            <div className="space-y-3">
+              <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-['Outfit']">
+                Let&apos;s Discover Your Games
+              </h1>
+              <p className="text-base text-zinc-300 leading-relaxed max-w-2xl">
+                OmniPlay automatically discovers, organizes, and launches your games from Steam, Epic Games, GOG Galaxy, Xbox / Microsoft Store, and local storage into a unified library.
+              </p>
+            </div>
+
+            {/* Main Action Buttons */}
+            <div className="pt-2 flex flex-wrap items-center gap-4">
+              {onRescan && (
+                <FocusableItem
+                  id="hero-first-scan"
+                  scope="main"
+                  group="hero"
+                  onConfirm={isScanning ? undefined : onRescan}
+                >
+                  {({ ref, isFocused }) => (
+                    <button
+                      ref={ref}
+                      type="button"
+                      onClick={isScanning ? undefined : onRescan}
+                      disabled={isScanning}
+                      className={`inline-flex items-center gap-3 px-6 py-3.5 rounded-2xl bg-teal-500 hover:bg-teal-400 text-zinc-950 font-bold text-base shadow-xl shadow-teal-500/25 transition-all transform active:scale-95 cursor-pointer disabled:opacity-60 ${
+                        isFocused ? 'controller-focus' : ''
+                      }`}
+                    >
+                      <RefreshCw className={`w-5 h-5 text-zinc-950 ${isScanning ? 'animate-spin' : ''}`} />
+                      <span>{isScanning ? 'Scanning Drives & Launchers...' : 'Scan PC for Games'}</span>
+                    </button>
+                  )}
+                </FocusableItem>
+              )}
+
+              {onOpenAccounts && (
+                <button
+                  type="button"
+                  onClick={onOpenAccounts}
+                  className="inline-flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700 text-zinc-200 hover:text-white font-semibold text-sm transition-all cursor-pointer"
+                >
+                  <Users className="w-4 h-4 text-teal-400" />
+                  <span>Connect Accounts</span>
+                </button>
+              )}
+            </div>
+
+            {/* Quick Feature Pillars */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-zinc-800/60">
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-surface-900/60 border border-zinc-800/60 text-xs">
+                <CheckCircle2 className="w-4 h-4 text-teal-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <span className="font-semibold text-zinc-200 block">Automatic Scan</span>
+                  <span className="text-[11px] text-zinc-400">Probes C:, D:, E: drives for installed titles</span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-surface-900/60 border border-zinc-800/60 text-xs">
+                <ShieldCheck className="w-4 h-4 text-teal-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <span className="font-semibold text-zinc-200 block">100% Offline &amp; Local</span>
+                  <span className="text-[11px] text-zinc-400">Direct disk manifests with zero cloud credentials</span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-surface-900/60 border border-zinc-800/60 text-xs">
+                <Gamepad2 className="w-4 h-4 text-teal-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <span className="font-semibold text-zinc-200 block">Official Protocols</span>
+                  <span className="text-[11px] text-zinc-400">Keeps achievements, cloud saves &amp; overlays</span>
+                </div>
+              </div>
+            </div>
           </div>
-          {recentGames.length > 0 && (
+        </div>
+      )}
+
+      {/* Recently Played Section (shown when games have been played) */}
+      {recentGames.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-teal-400" />
+              <h2 className="text-xl font-bold text-white font-['Outfit']">Recently Played</h2>
+            </div>
             <button
               type="button"
               onClick={() => onNavigate('recently-played')}
@@ -224,10 +325,8 @@ export const Home: React.FC<HomeProps> = ({
             >
               View All &rarr;
             </button>
-          )}
-        </div>
+          </div>
 
-        {recentGames.length > 0 ? (
           <GameGrid
             games={recentGames}
             onToggleFavorite={onToggleFavorite}
@@ -239,18 +338,8 @@ export const Home: React.FC<HomeProps> = ({
             onRemove={onRemove}
             onHide={onHide}
           />
-        ) : (
-          <div className="p-8 rounded-2xl bg-surface-850/60 border border-zinc-800/80 text-center flex flex-col items-center justify-center space-y-2">
-            <div className="p-3 rounded-full bg-zinc-800/60 text-zinc-500 mb-1">
-              <Clock className="w-5 h-5" />
-            </div>
-            <p className="text-sm font-medium text-zinc-300">No Recently Played Games</p>
-            <p className="text-xs text-zinc-500 max-w-sm">
-              Launch a game from your library to start tracking your recent sessions.
-            </p>
-          </div>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* Main Games Section with Installed / Available / All Toggle */}
       <section className="space-y-5">
@@ -360,34 +449,63 @@ export const Home: React.FC<HomeProps> = ({
             onHide={onHide}
           />
         ) : (
-          <div className="p-12 rounded-2xl bg-surface-850/60 border border-zinc-800/80 text-center flex flex-col items-center justify-center space-y-3">
+          <div className="p-12 rounded-2xl bg-surface-850/60 border border-zinc-800/80 text-center flex flex-col items-center justify-center space-y-4">
             <div className="p-4 rounded-full bg-zinc-800/60 text-zinc-500 mb-1">
-              {homeFilter === 'INSTALLED' ? (
-                <HardDrive className="w-6 h-6 text-teal-400/60" />
+              {games.length === 0 ? (
+                <FolderSearch className="w-8 h-8 text-teal-400/80" />
+              ) : homeFilter === 'INSTALLED' ? (
+                <HardDrive className="w-8 h-8 text-teal-400/80" />
               ) : (
-                <Download className="w-6 h-6 text-sky-400/60" />
+                <Download className="w-8 h-8 text-sky-400/80" />
               )}
             </div>
-            <p className="text-base font-semibold text-zinc-200">
-              {homeFilter === 'INSTALLED'
-                ? 'No Installed Games Found'
-                : 'No Games Available to Install'}
-            </p>
-            <p className="text-xs text-zinc-400 max-w-md">
-              {homeFilter === 'INSTALLED'
-                ? 'Select "Available to Install" to download games from your linked Epic Games or Steam accounts, or add a game manually.'
-                : 'All your games are currently installed or no external accounts have pending games.'}
-            </p>
-            {homeFilter === 'INSTALLED' && availableGames.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setHomeFilter('AVAILABLE')}
-                className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 hover:bg-sky-500/20 text-xs font-semibold transition-all cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                <span>View {availableGames.length} Games Available to Install</span>
-              </button>
-            )}
+            <div className="space-y-1">
+              <p className="text-lg font-bold text-zinc-100">
+                {games.length === 0
+                  ? 'No Games Discovered Yet'
+                  : homeFilter === 'INSTALLED'
+                  ? 'No Installed Games Found'
+                  : 'No Games Available to Install'}
+              </p>
+              <p className="text-xs text-zinc-400 max-w-md mx-auto">
+                {games.length === 0
+                  ? 'Click "Scan PC for Games" to discover all games installed across your Steam, Epic Games, GOG, and local directories.'
+                  : homeFilter === 'INSTALLED'
+                  ? 'Select "Available to Install" to view titles ready to download, or scan drives for newly installed games.'
+                  : 'All your games are currently installed or no external accounts have pending games.'}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+              {onRescan && (
+                <button
+                  type="button"
+                  onClick={onRescan}
+                  disabled={isScanning}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 font-bold text-xs shadow-md shadow-teal-500/20 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 text-zinc-950 ${isScanning ? 'animate-spin' : ''}`} />
+                  <span>
+                    {isScanning
+                      ? 'Scanning Drives...'
+                      : games.length === 0
+                      ? 'Scan PC for Games'
+                      : 'Scan for Installed Games'}
+                  </span>
+                </button>
+              )}
+
+              {homeFilter === 'INSTALLED' && availableGames.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setHomeFilter('AVAILABLE')}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 hover:bg-sky-500/20 text-xs font-semibold transition-all cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>View {availableGames.length} Games Available to Install</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
       </section>

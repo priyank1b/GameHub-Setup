@@ -1,5 +1,6 @@
 !macro customInit
-  # 1. Terminate running GameHub instances so binaries are not locked during installation / upgrade
+  # 1. Terminate running OmniPlay / GameHub instances so binaries are not locked during installation / upgrade
+  ExecWait 'cmd.exe /c taskkill /F /IM OmniPlay.exe /T >nul 2>&1'
   ExecWait 'cmd.exe /c taskkill /F /IM GameHub.exe /T >nul 2>&1'
   Sleep 500
 !macroend

@@ -1,8 +1,10 @@
+import fs from 'fs';
 import { Database } from 'better-sqlite3';
 import {
   CanonicalGame,
   GameLibraryStatus,
   OwnershipRecord,
+  LocalInstallationStatus,
 } from '../../../src/types/LauncherAccount';
 import { LocalInstallationRepository } from './LocalInstallationRepository';
 import { GameLauncher } from '../../../src/types/Launcher';
@@ -12,6 +14,34 @@ export class CanonicalGameRepository {
 
   constructor(private db: Database) {
     this.localInstallationsRepo = new LocalInstallationRepository(db);
+  }
+
+  private isInstallationActuallyOnDisk(inst: any): boolean {
+    if (inst.status !== 'INSTALLED') return false;
+    const targetPath = inst.installPath || inst.executablePath;
+    if (!targetPath) return false;
+
+    // Check if drive is connected
+    const driveLetter = targetPath.slice(0, 2).toUpperCase();
+    if (driveLetter && /^[A-Z]:$/.test(driveLetter)) {
+      if (!fs.existsSync(`${driveLetter}\\`)) {
+        // Drive is disconnected / unplugged; keep status as-is
+        return true;
+      }
+    }
+
+    if (inst.installPath && fs.existsSync(inst.installPath)) {
+      try {
+        const files = fs.readdirSync(inst.installPath);
+        if (files.length > 0) return true;
+      } catch {
+        return true;
+      }
+    }
+    if (inst.executablePath && fs.existsSync(inst.executablePath)) {
+      return true;
+    }
+    return false;
   }
 
   public getAll(includeHidden = false): CanonicalGame[] {
@@ -58,18 +88,23 @@ export class CanonicalGameRepository {
     }
 
     return rows.map((row) => {
-      const installations = installMap.get(row.id) || [];
+      const rawInstalls = installMap.get(row.id) || [];
+      const installations = rawInstalls.map((i) => ({
+        ...i,
+        status: (this.isInstallationActuallyOnDisk(i) ? 'INSTALLED' : 'MISSING') as LocalInstallationStatus,
+      }));
+      const activeInstalls = installations.filter((i) => i.status === 'INSTALLED');
       const rawOwn = ownershipMap.get(row.id) || [];
 
       const ownerships: OwnershipRecord[] = rawOwn.map((o) => {
-        const matchingInstall = installations.find(
+        const matchingInstall = activeInstalls.find(
           (i) =>
             (i.launcherGameEntryId && i.launcherGameEntryId === o.entry_id) ||
             (i.launcherAccountId && i.launcherAccountId === o.account_id) ||
             (!i.launcherAccountId && i.launcher === o.launcher)
         );
-        const hasInstallOnLauncher = installations.some(
-          (i) => i.status === 'INSTALLED' && i.launcher === o.launcher
+        const hasInstallOnLauncher = activeInstalls.some(
+          (i) => i.launcher === o.launcher
         );
         const isInstalled = Boolean(
           hasInstallOnLauncher &&
@@ -92,7 +127,7 @@ export class CanonicalGameRepository {
       });
 
       let status: GameLibraryStatus = 'UNKNOWN';
-      if (installations.some((i) => i.status === 'INSTALLED')) {
+      if (activeInstalls.length > 0) {
         status = 'INSTALLED';
       } else if (ownerships.length > 0) {
         status = 'AVAILABLE';
@@ -288,6 +323,12 @@ export class CanonicalGameRepository {
   }
 
   public delete(id: number): boolean {
+    try {
+      this.db.prepare('DELETE FROM local_installations WHERE canonical_game_id = ?').run(id);
+      this.db.prepare('DELETE FROM launcher_game_entries WHERE canonical_game_id = ?').run(id);
+    } catch (err: any) {
+      console.warn(`[CanonicalGameRepository] Cleanup error on delete for id ${id}:`, err.message);
+    }
     const stmt = this.db.prepare('DELETE FROM canonical_games WHERE id = ?');
     const result = stmt.run(id);
     return result.changes > 0;
@@ -305,7 +346,12 @@ export class CanonicalGameRepository {
   }
 
   private hydrateCanonicalGame(row: any): CanonicalGame {
-    const installations = this.localInstallationsRepo.getByCanonicalId(row.id);
+    const rawInstalls = this.localInstallationsRepo.getByCanonicalId(row.id);
+    const installations = rawInstalls.map((i) => ({
+      ...i,
+      status: (this.isInstallationActuallyOnDisk(i) ? 'INSTALLED' : 'MISSING') as LocalInstallationStatus,
+    }));
+    const activeInstalls = installations.filter((i) => i.status === 'INSTALLED');
 
     // Fetch ownerships across accounts for this canonical game
     const ownershipRows = this.db.prepare(`
@@ -323,14 +369,14 @@ export class CanonicalGameRepository {
     `).all(row.id) as any[];
 
     const ownerships: OwnershipRecord[] = ownershipRows.map((o) => {
-      const matchingInstall = installations.find(
+      const matchingInstall = activeInstalls.find(
         (i) =>
           (i.launcherGameEntryId && i.launcherGameEntryId === o.entry_id) ||
           (i.launcherAccountId && i.launcherAccountId === o.account_id) ||
           (!i.launcherAccountId && i.launcher === o.launcher)
       );
-      const hasInstallOnLauncher = installations.some(
-        (i) => i.status === 'INSTALLED' && i.launcher === o.launcher
+      const hasInstallOnLauncher = activeInstalls.some(
+        (i) => i.launcher === o.launcher
       );
       const isInstalled = Boolean(
         hasInstallOnLauncher &&
@@ -353,11 +399,11 @@ export class CanonicalGameRepository {
     });
 
     // Compute overall game library status:
-    // If any local installation is INSTALLED -> INSTALLED
+    // If any active local installation is INSTALLED -> INSTALLED
     // Else if ownership exists with install available -> AVAILABLE
     // Else -> UNKNOWN
     let status: GameLibraryStatus = 'UNKNOWN';
-    if (installations.some((i) => i.status === 'INSTALLED')) {
+    if (activeInstalls.length > 0) {
       status = 'INSTALLED';
     } else if (ownerships.length > 0) {
       status = 'AVAILABLE';

@@ -1,9 +1,9 @@
 {
-  "name": "gamehub",
-  "version": "2.0.0",
-  "author": "GameHub Team",
+  "name": "omniplay",
+  "version": "2.0.2",
+  "author": "OmniPlay Team",
   "license": "MIT",
-  "description": "Unified PC Game Library & Launcher",
+  "description": "OmniPlay: All-in-One PC Game Launcher",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
@@ -15,6 +15,7 @@
     "build:electron": "node scripts/build-electron.js",
     "package": "node scripts/build-electron.js && vite build && electron-builder",
     "package:dir": "node scripts/build-electron.js && vite build && electron-builder --dir",
+    "package:msix": "node scripts/build-electron.js && vite build && electron-builder --win appx",
     "dist": "node scripts/build-electron.js && vite build && electron-builder",
     "preview": "vite preview",
     "postinstall": "node scripts/postinstall.js"

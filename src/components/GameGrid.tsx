@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Game } from '../types/Game';
 import { GameCard } from './GameCard';
 import { Loader2 } from 'lucide-react';
+import { useCardSize } from '../context/CardSizeContext';
 
 interface GameGridProps {
   games: Game[];
@@ -16,6 +17,7 @@ interface GameGridProps {
   className?: string;
   initialBatch?: number;
   batchSize?: number;
+  cardSize?: number;
 }
 
 export const GameGrid: React.FC<GameGridProps> = ({
@@ -31,7 +33,10 @@ export const GameGrid: React.FC<GameGridProps> = ({
   className = '',
   initialBatch = 36,
   batchSize = 24,
+  cardSize,
 }) => {
+  const { cardSize: contextCardSize } = useCardSize();
+  const effectiveCardSize = cardSize ?? contextCardSize;
   const [visibleCount, setVisibleCount] = useState<number>(() =>
     Math.min(initialBatch, games.length)
   );
@@ -79,7 +84,10 @@ export const GameGrid: React.FC<GameGridProps> = ({
   return (
     <div className="space-y-6">
       <div
-        className={`grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-5 ${className}`}
+        className={`grid gap-5 transition-[grid-template-columns] duration-150 ${className}`}
+        style={{
+          gridTemplateColumns: `repeat(auto-fill, minmax(${effectiveCardSize}px, 1fr))`,
+        }}
         data-testid="game-grid"
       >
         {visibleGames.map((game) => (

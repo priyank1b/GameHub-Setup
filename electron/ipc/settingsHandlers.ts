@@ -66,10 +66,36 @@ export function registerSettingsHandlers(settingsRepo: SettingsRepository): void
   ipcMain.handle('settings:clearCache', async () => {
     try {
       const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
-      const cacheDir = path.join(appData, 'GameHub', 'Cache');
-      if (fs.existsSync(cacheDir)) {
-        fs.rmSync(cacheDir, { recursive: true, force: true });
+      const ghDir = path.join(appData, 'GameHub');
+
+      const cacheTargets = [
+        path.join(ghDir, 'Cache'),
+        path.join(ghDir, 'Code Cache'),
+        path.join(ghDir, 'GPUCache'),
+        path.join(ghDir, 'DawnGraphiteCache'),
+        path.join(ghDir, 'DawnWebGPUCache'),
+        path.join(ghDir, 'cache'),
+        path.join(ghDir, 'steam_store_cache.json'),
+      ];
+
+      let clearedCount = 0;
+      for (const target of cacheTargets) {
+        try {
+          if (fs.existsSync(target)) {
+            const stat = fs.statSync(target);
+            if (stat.isDirectory()) {
+              fs.rmSync(target, { recursive: true, force: true });
+            } else {
+              fs.unlinkSync(target);
+            }
+            clearedCount++;
+          }
+        } catch (itemErr: any) {
+          console.warn(`[IPC settings:clearCache] Could not remove ${target}:`, itemErr.message);
+        }
       }
+
+      console.log(`[IPC settings:clearCache] Cleared ${clearedCount} cache targets.`);
       return { success: true };
     } catch (err: any) {
       console.error('[IPC settings:clearCache] Error:', err.message);

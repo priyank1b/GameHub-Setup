@@ -1,6 +1,6 @@
 export const APP_CONFIG = {
-  name: 'GameHub',
-  tagline: 'Your games. One place.',
-  version: '2.0.0',
-  description: 'Unified PC Game Library & Launcher for Windows',
+  name: 'OmniPlay',
+  tagline: 'All your games. One unified launcher.',
+  version: '2.0.2',
+  description: 'OmniPlay: All-in-One PC Game Launcher for Windows',
 };

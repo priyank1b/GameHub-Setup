@@ -117,7 +117,18 @@ export function registerGameHandlers(
       if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) {
         throw new Error(`Invalid game ID: ${id}`);
       }
-      return gameRepo.delete(id);
+      let deleted = false;
+      if (canonicalRepo) {
+        try {
+          const res = canonicalRepo.delete(id);
+          if (res) deleted = true;
+        } catch (cErr: any) {
+          console.warn(`[IPC games:remove] canonicalRepo.delete error for id ${id}:`, cErr.message);
+        }
+      }
+      const legacyDeleted = gameRepo.delete(id);
+      if (legacyDeleted) deleted = true;
+      return deleted;
     } catch (err: any) {
       console.error(`[IPC games:remove] Error for id ${id}:`, err.message);
       throw err;
@@ -129,6 +140,11 @@ export function registerGameHandlers(
     try {
       if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) {
         return false;
+      }
+      if (canonicalRepo) {
+        try {
+          canonicalRepo.setHidden(id, true);
+        } catch {}
       }
       return !!gameRepo.setHidden(id, true);
     } catch (err: any) {
@@ -143,6 +159,11 @@ export function registerGameHandlers(
       if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) {
         return false;
       }
+      if (canonicalRepo) {
+        try {
+          canonicalRepo.setHidden(id, false);
+        } catch {}
+      }
       return !!gameRepo.setHidden(id, false);
     } catch (err: any) {
       console.error(`[IPC games:unhide] Error for id ${id}:`, err.message);
@@ -153,6 +174,49 @@ export function registerGameHandlers(
   // Get all hidden/excluded games
   ipcMain.handle('games:getHidden', async () => {
     try {
+      if (canonicalRepo) {
+        const hiddenCanonical = canonicalRepo.getAll(true).filter((cg) => cg.isHidden);
+        if (hiddenCanonical.length > 0) {
+          return hiddenCanonical.map((cg) => {
+            const primaryInstall =
+              cg.installations.find((i) => i.status === 'INSTALLED') ||
+              cg.installations[0];
+            const primaryOwnership = cg.ownerships[0];
+            return {
+              id: cg.id,
+              name: cg.title,
+              normalizedName: cg.normalizedTitle,
+              coverImage: cg.coverImage,
+              backgroundImage: cg.backgroundImage,
+              iconPath: cg.iconPath,
+              description: cg.description,
+              developer: cg.developer,
+              publisher: cg.publisher,
+              genre: cg.genre,
+              releaseDate: cg.releaseDate,
+              isFavorite: cg.isFavorite,
+              isInstalled: cg.status === 'INSTALLED',
+              isManual: false,
+              isHidden: true,
+              lastPlayedAt: cg.lastPlayedAt,
+              totalPlayTime: cg.totalPlayTime,
+              launcher: primaryInstall?.launcher || primaryOwnership?.launcher || 'UNKNOWN',
+              launcherAppId: primaryOwnership?.externalGameId,
+              installPath: primaryInstall?.installPath,
+              executablePath: primaryInstall?.executablePath,
+              installedSize: primaryInstall?.installSizeBytes || 0,
+              installSizeBytes: primaryInstall?.installSizeBytes || 0,
+              installSizeStatus: primaryInstall?.installSizeStatus || 'UNKNOWN',
+              installSizeSource: primaryInstall?.installSizeSource || 'unknown',
+              drive: primaryInstall?.installPath
+                ? primaryInstall.installPath.slice(0, 2).toUpperCase()
+                : undefined,
+              libraryStatus: cg.status,
+              ownerships: cg.ownerships,
+            };
+          });
+        }
+      }
       return gameRepo.getHidden();
     } catch (err: any) {
       console.error('[IPC games:getHidden] Error:', err.message);
@@ -165,6 +229,11 @@ export function registerGameHandlers(
     try {
       if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) {
         throw new Error(`Invalid game ID: ${id}`);
+      }
+      if (canonicalRepo) {
+        try {
+          canonicalRepo.toggleFavorite(id);
+        } catch {}
       }
       return gameRepo.toggleFavorite(id);
     } catch (err: any) {
