@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to GameHub are documented in this file.
+All notable changes to OmniPlay (formerly GameHub) are documented in this file.
 
 ## [2.0.2] - 2026-11-06
 

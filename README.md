@@ -1,22 +1,25 @@
-# GameHub 🎮 — Unified PC Game Library & Launcher
+# OmniPlay 🎮 — All-in-One PC Game Launcher
 
-[![Release](https://img.shields.io/badge/release-v2.0.0-teal.svg)](https://github.com/priyank1b/GameHub-Setup/releases)
+[![Release](https://img.shields.io/badge/release-v2.0.2-teal.svg)](https://github.com/priyank1b/GameHub-Setup/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](https://github.com/priyank1b/GameHub-Setup)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Framework](https://img.shields.io/badge/Electron-33.x-47848F.svg)](https://www.electronjs.org/)
 [![UI](https://img.shields.io/badge/React-18.x-61DAFB.svg)](https://react.dev/)
 
-**GameHub** is a high-performance Windows desktop application designed to discover, organize, and launch games across all drives and launchers on your PC. It combines games from Steam, Epic Games, GOG Galaxy, Ubisoft Connect, Microsoft Store / Xbox, and standalone installations into a single unified library.
+**OmniPlay** (formerly GameHub) is a high-performance Windows desktop application designed to discover, organize, and launch games across all drives and launchers on your PC. It combines games from Steam, Epic Games, GOG Galaxy, Ubisoft Connect, Microsoft Store / Xbox, and standalone installations into a single unified library.
 
-> **Privacy & Platform Respect**: GameHub strictly manages and launches legitimately installed games. It uses official platform protocols (`steam://rungameid/`, Epic URI schemes, GOG Galaxy hooks) to preserve achievements, cloud saves, overlays, and DRM without modifying game binaries.
+> **Privacy & Platform Respect**: OmniPlay strictly manages and launches legitimately installed games. It uses official platform protocols (`steam://rungameid/`, Epic URI schemes, GOG Galaxy hooks) to preserve achievements, cloud saves, overlays, and DRM without modifying game binaries.
 
 ---
 
 ## ✨ Features
 
+- 🔧 **More Reliable Game Detection (v2.0.2)**:
+  - Rescans now show newly installed games in the Library right away, and they no longer appear under Install after Sync All.
+  - Fresh Steam installs are detected even before Steam adds them to `libraryfolders.vdf`.
 - 👥 **Multi-Account & Uninstalled Library Support (v2.0.0)**:
   - Connect multiple accounts per launcher (multiple local Steam user profiles, Family Sharing libraries, and Epic Games accounts).
-  - Full uninstalled library synchronization: browse and install owned games directly from GameHub.
+  - Full uninstalled library synchronization: browse and install owned games directly from OmniPlay.
   - Smart canonical game grouping: groups game ownership across accounts without duplicating entries.
   - Accurate library crediting: strictly attributes installed and shared games to their genuine owners.
   - Dual Home & Library views: instantly switch between **Installed**, **Available to Install**, and **All Games**.
@@ -51,6 +54,7 @@
   - Displays high-resolution cover artwork, heroes, logos, and game descriptions.
   - Official Steam Web Store API integration with disk caching (`%APPDATA%/GameHub/cache/artwork/`).
   - Full in-app metadata editor for custom and standalone games.
+  - Adjustable game card size.
 - ⚡ **Lightning-Fast Performance**:
   - Optimized SQLite storage with WAL (Write-Ahead Logging), 64MB memory page cache, and covered indexes.
   - Virtualized rendering with `content-visibility: auto` ensuring buttery smooth 60fps scrolling with 1,000+ games.
@@ -74,14 +78,19 @@
 
 ## 📥 Download & Installation
 
-### Option 1: Windows Setup Installer (Recommended)
-Download **`GameHub-Setup.exe`** from the [Releases](https://github.com/priyank1b/GameHub-Setup/releases) page.
+### Option 1: Microsoft Store (Recommended)
+Get [OmniPlay from the Microsoft Store](https://apps.microsoft.com/detail/9NB6TDP23XMN). The Store installs updates automatically.
+
+### Option 2: Windows Setup Installer
+Download **`OmniPlay-Setup.exe`** from the [Releases](https://github.com/priyank1b/GameHub-Setup/releases) page.
 - Runs standard Windows setup wizard.
 - Creates Start Menu and Desktop shortcuts.
 - Configures clean Windows uninstaller.
 
-### Option 2: Portable Unpacked Release
-Extract the `win-unpacked` folder and run `GameHub.exe` directly without installation.
+> **Note:** the installer isn't code-signed yet, so Windows SmartScreen may show a warning. Select **More info → Run anyway** to continue.
+
+### Upgrading from GameHub
+Your library data stays where it is, in `%APPDATA%\GameHub`. That folder keeps its old name for now.
 
 ---
 
@@ -94,14 +103,14 @@ Extract the `win-unpacked` folder and run `GameHub.exe` directly without install
 | **Styling & Icons** | Tailwind CSS, Lucide React |
 | **Build Tools** | Vite 6, esbuild |
 | **Database** | SQLite via `better-sqlite3` (WAL mode enabled) |
-| **Packaging** | `electron-builder` (NSIS target) |
+| **Packaging** | `electron-builder` (NSIS and AppX targets) |
 
 ---
 
 ## 🏗️ Architecture
 
 ```text
-                         GAMEHUB
+                        OMNIPLAY
                             │
             ┌───────────────┴───────────────┐
             │                               │
@@ -155,9 +164,15 @@ Extract the `win-unpacked` folder and run `GameHub.exe` directly without install
 
 5. **Package Windows Installer**:
    ```bash
-   npx electron-builder --win nsis
+   npm run package
    ```
-   The generated installer will be located at `release/GameHub-Setup.exe`.
+   The generated installer will be located at `release/OmniPlay-Setup.exe`.
+
+6. **Package for the Microsoft Store** (optional):
+   ```bash
+   npm run package:msix
+   ```
+   The generated package will be located at `release/OmniPlay <version>.appx`. It is unsigned and only for Store submission.
 
 ---
 
