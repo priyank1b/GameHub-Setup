@@ -85,11 +85,11 @@ export class TrayService {
       }
 
       this.tray = new Tray(icon);
-      this.tray.setToolTip('GameHub — Game Launcher & Library');
+      this.tray.setToolTip('OmniPlay — Game Launcher & Library');
 
       const contextMenu = Menu.buildFromTemplate([
         {
-          label: 'GameHub',
+          label: 'OmniPlay',
           enabled: false,
         },
         {

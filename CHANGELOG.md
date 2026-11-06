@@ -2,6 +2,12 @@
 
 All notable changes to GameHub are documented in this file.
 
+## [2.0.2] - 2026-11-06
+
+### Fixed
+- **Rescan not showing installed games**: Rescan now records detected installs in the canonical library tables (`canonical_games` / `local_installations`) that the Library reads, so newly installed games appear immediately and no longer show up under Install after Sync All.
+- **Fresh Steam installs skipped**: `SteamDetector` no longer rejects games missing from `libraryfolders.vdf` (Steam writes it lazily); the appmanifest and install folder are used instead.
+
 ## [2.0.0] - 2026-09-28
 
 ### Added — Multi-Account Management & Uninstalled Games Library

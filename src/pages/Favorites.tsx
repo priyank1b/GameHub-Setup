@@ -29,7 +29,7 @@ export const Favorites: React.FC<FavoritesProps> = ({
   const favoriteGames = games.filter((g) => g.isFavorite);
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 pt-6">
       {/* Header Banner */}
       <div className="flex items-center justify-between p-6 rounded-2xl bg-surface-850 border border-zinc-800/80">
         <div className="flex items-center gap-3">

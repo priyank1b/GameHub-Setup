@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SearchBar } from './SearchBar';
-import { RefreshCw, Plus, Settings, Minus, Square, Copy, X, Users, HelpCircle } from 'lucide-react';
+import { RefreshCw, Plus, Settings, Minus, Square, Copy, X, Users, HelpCircle, ChevronDown, Trash2, Sparkles } from 'lucide-react';
 import { PageRoute } from '../types/Navigation';
 
 interface TopBarProps {
@@ -10,14 +10,17 @@ interface TopBarProps {
   onSearchSubmit?: () => void;
   onNavigate: (page: PageRoute) => void;
   onRescan?: () => void;
+  onClearCacheAndRescan?: () => void;
   onAddGame?: () => void;
   onOpenAccounts?: () => void;
   isScanning?: boolean;
+  gameCount?: number;
 }
 
 import { FocusableItem } from './FocusableItem';
 import { useNavigation } from '../context/NavigationContext';
 import { Gamepad2 } from 'lucide-react';
+import { CardSizeControl } from './CardSizeControl';
 
 export const TopBar: React.FC<TopBarProps> = ({
   currentPage,
@@ -26,12 +29,30 @@ export const TopBar: React.FC<TopBarProps> = ({
   onSearchSubmit,
   onNavigate,
   onRescan,
+  onClearCacheAndRescan,
   onAddGame,
   onOpenAccounts,
   isScanning = false,
+  gameCount = 0,
 }) => {
   const { controllerInfo } = useNavigation();
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
+  const [isScanMenuOpen, setIsScanMenuOpen] = useState(false);
+  const scanMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (scanMenuRef.current && !scanMenuRef.current.contains(e.target as Node)) {
+        setIsScanMenuOpen(false);
+      }
+    };
+    if (isScanMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isScanMenuOpen]);
 
   useEffect(() => {
     if (window.gameHub?.window?.isMaximized) {
@@ -73,7 +94,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       case 'settings':
         return 'Settings';
       default:
-        return 'GameHub';
+        return 'OmniPlay';
     }
   };
 
@@ -83,7 +104,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         if ((e.target as HTMLElement).closest('.no-drag')) return;
         handleMaximize();
       }}
-      className="h-16 px-6 border-b border-zinc-800/80 bg-surface-900/80 backdrop-blur-md flex items-center justify-between gap-4 sticky top-0 z-30 select-none drag-region"
+      className="h-16 pl-6 pr-0 border-b border-zinc-800/80 bg-surface-900/80 backdrop-blur-md flex items-center justify-between gap-4 sticky top-0 z-30 select-none drag-region"
     >
       {/* Current Page Title */}
       <div className="flex items-center gap-3 no-drag">
@@ -103,7 +124,8 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       {/* Quick Action Buttons & Integrated Window Controls */}
-      <div className="flex items-center gap-2.5 no-drag">
+      <div className="flex items-center h-full no-drag">
+        <div className="flex items-center gap-2.5 pr-3">
         {/* Live Controller Connection Indicator */}
         {controllerInfo?.connected && (
           <div
@@ -117,29 +139,105 @@ export const TopBar: React.FC<TopBarProps> = ({
           </div>
         )}
 
-        {/* Rescan Button */}
-        <FocusableItem
-          id="topbar-rescan"
-          scope="topbar"
-          group="actions"
-          onConfirm={isScanning ? undefined : onRescan}
-        >
-          {({ ref, isFocused }) => (
-            <button
-              ref={ref}
-              type="button"
-              onClick={isScanning ? undefined : onRescan}
-              disabled={isScanning}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-850 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50 ${
-                isFocused ? 'controller-focus' : ''
-              }`}
-              title="Rescan drives for games"
+        {/* Rescan / Scan for Games Button */}
+        {gameCount === 0 ? (
+          <FocusableItem
+            id="topbar-scan-initial"
+            scope="topbar"
+            group="actions"
+            onConfirm={isScanning ? undefined : onRescan}
+          >
+            {({ ref, isFocused }) => (
+              <button
+                ref={ref}
+                type="button"
+                onClick={isScanning ? undefined : onRescan}
+                disabled={isScanning}
+                className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 text-xs font-bold shadow-lg shadow-teal-500/25 transition-all cursor-pointer active:scale-95 disabled:opacity-50 ${
+                  isFocused ? 'controller-focus' : ''
+                }`}
+                title="Scan your PC to discover games"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-zinc-950" />
+                <RefreshCw className={`w-3.5 h-3.5 text-zinc-950 ${isScanning ? 'animate-spin' : ''}`} />
+                <span>{isScanning ? 'Scanning PC...' : 'Scan for Games'}</span>
+              </button>
+            )}
+          </FocusableItem>
+        ) : (
+          <div className="relative inline-flex items-center rounded-xl bg-surface-850 border border-zinc-800 hover:border-zinc-700 shadow-sm transition-all" ref={scanMenuRef}>
+            <FocusableItem
+              id="topbar-rescan"
+              scope="topbar"
+              group="actions"
+              onConfirm={isScanning ? undefined : onRescan}
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-teal-400 ${isScanning ? 'animate-spin' : ''}`} />
-              <span>{isScanning ? 'Scanning...' : 'Rescan'}</span>
+              {({ ref, isFocused }) => (
+                <button
+                  ref={ref}
+                  type="button"
+                  onClick={isScanning ? undefined : onRescan}
+                  disabled={isScanning}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-l-xl hover:bg-zinc-800/80 text-xs font-semibold text-zinc-200 hover:text-white transition-all cursor-pointer disabled:opacity-50 ${
+                    isFocused ? 'controller-focus' : ''
+                  }`}
+                  title="Rescan drives for newly installed games (F5)"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-teal-400 ${isScanning ? 'animate-spin' : ''}`} />
+                  <span>{isScanning ? 'Scanning...' : 'Rescan'}</span>
+                </button>
+              )}
+            </FocusableItem>
+
+            <div className="w-[1px] h-4 bg-zinc-700/60" />
+
+            <button
+              type="button"
+              onClick={() => setIsScanMenuOpen((prev) => !prev)}
+              disabled={isScanning}
+              className={`px-2 py-1.5 rounded-r-xl hover:bg-zinc-800/80 text-zinc-400 hover:text-teal-400 transition-all cursor-pointer flex items-center justify-center disabled:opacity-50 ${
+                isScanMenuOpen ? 'text-teal-400 bg-zinc-800' : ''
+              }`}
+              title="Scan and cache options (Clear cache & rescan)"
+            >
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isScanMenuOpen ? 'rotate-180 text-teal-400' : ''}`} />
             </button>
-          )}
-        </FocusableItem>
+
+            {isScanMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-surface-900/95 backdrop-blur-xl border border-zinc-800 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-100 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsScanMenuOpen(false);
+                    onRescan?.();
+                  }}
+                  className="w-full flex items-start gap-2.5 p-2 rounded-xl text-left hover:bg-zinc-800/70 transition-all text-xs text-zinc-300 hover:text-white cursor-pointer"
+                >
+                  <RefreshCw className="w-4 h-4 text-teal-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-semibold text-white">Rescan Library</p>
+                    <p className="text-[10px] text-zinc-400">Quick check for newly installed or moved games (F5)</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsScanMenuOpen(false);
+                    onClearCacheAndRescan?.();
+                  }}
+                  className="w-full flex items-start gap-2.5 p-2 rounded-xl text-left hover:bg-amber-500/10 hover:text-amber-300 transition-all text-xs text-zinc-300 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-semibold text-amber-300">Clear Cache &amp; Rescan</p>
+                    <p className="text-[10px] text-zinc-400">Wipe artwork &amp; metadata cache, then execute clean full scan</p>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Add Game Button */}
         <FocusableItem
@@ -187,6 +285,9 @@ export const TopBar: React.FC<TopBarProps> = ({
           )}
         </FocusableItem>
 
+        {/* Card Display Size Density Control */}
+        <CardSizeControl variant="popover" />
+
         {/* Help & Documentation */}
         <FocusableItem
           id="topbar-help"
@@ -231,8 +332,10 @@ export const TopBar: React.FC<TopBarProps> = ({
           )}
         </FocusableItem>
 
-        {/* Integrated Window Controls */}
-        <div className="flex items-center gap-1 ml-1.5 pl-2.5 border-l border-zinc-800/80">
+        </div>
+
+        {/* Integrated Window Controls - flush to top-right corner */}
+        <div className="flex items-center h-full border-l border-zinc-800/80">
           <FocusableItem
             id="topbar-minimize"
             scope="topbar"
@@ -244,7 +347,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 ref={ref}
                 type="button"
                 onClick={handleMinimize}
-                className={`p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800/80 active:scale-95 transition-all cursor-pointer ${
+                className={`w-11 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer ${
                   isFocused ? 'controller-focus' : ''
                 }`}
                 title="Minimize"
@@ -265,7 +368,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 ref={ref}
                 type="button"
                 onClick={handleMaximize}
-                className={`p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800/80 active:scale-95 transition-all cursor-pointer ${
+                className={`w-11 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer ${
                   isFocused ? 'controller-focus' : ''
                 }`}
                 title={isMaximized ? 'Restore' : 'Maximize'}
@@ -290,7 +393,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 ref={ref}
                 type="button"
                 onClick={handleClose}
-                className={`p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-red-600 active:scale-95 transition-all cursor-pointer ${
+                className={`w-12 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-red-600 active:bg-red-700 transition-colors cursor-pointer ${
                   isFocused ? 'controller-focus' : ''
                 }`}
                 title="Close"

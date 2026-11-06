@@ -1,31 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Sliders,
-  FolderPlus,
-  Trash2,
   Moon,
-  Database,
-  Download,
-  Upload,
-  FileText,
-  Check,
-  Shield,
-  Layers,
-  Sparkles,
-  HardDrive,
   RefreshCw,
-  FolderOpen,
   Gamepad2,
-  CheckCircle2,
-  XCircle,
   Eye,
   EyeOff,
   Key,
   ShieldCheck,
   BookOpen,
   Info,
-  Clock,
-  HelpCircle,
+  Check,
 } from 'lucide-react';
 import { APP_CONFIG } from '../config/appConfig';
 import { WindowsDrive } from '../types/Drive';
@@ -34,58 +19,37 @@ import { PageRoute } from '../types/Navigation';
 import { formatImageUrl } from '../utils/formatImage';
 import { useNavigation } from '../context/NavigationContext';
 import { FocusableItem } from '../components/FocusableItem';
+import { CardSizeControl } from '../components/CardSizeControl';
+import { Drives } from './Drives';
 
 interface SettingsProps {
   onLibraryUpdated?: () => void;
   onNavigate?: (page: PageRoute) => void;
   games?: Game[];
+  onClearCacheAndRescan?: () => void;
+  initialTab?: 'general' | 'drives' | 'library' | 'appearance' | 'controller';
 }
 
-export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate, games = [] }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'library' | 'appearance' | 'advanced' | 'controller'>('general');
+export const Settings: React.FC<SettingsProps> = ({
+  onLibraryUpdated,
+  onNavigate,
+  games = [],
+  onClearCacheAndRescan,
+  initialTab = 'general',
+}) => {
+  const [activeTab, setActiveTab] = useState<'general' | 'drives' | 'library' | 'appearance' | 'controller'>(initialTab);
   const { controllerInfo, isControllerEnabled, setControllerEnabled } = useNavigation();
 
-  // Computed Library & Storage Stats (Moved from Home)
-  const installedGames = games.filter((g) => g.isInstalled);
-  const missingGamesCount = games.length - installedGames.length;
-
-  const totalPlaySeconds = games.reduce((acc, g) => acc + (g.totalPlayTime || 0), 0);
-  const playTimeDisplay =
-    totalPlaySeconds >= 3600
-      ? `${(totalPlaySeconds / 3600).toFixed(1)} hrs`
-      : totalPlaySeconds > 0
-      ? `${Math.ceil(totalPlaySeconds / 60)} mins`
-      : '0 hrs';
-
-  const totalSizeBytes = games.reduce((acc, g) => acc + (g.installSizeBytes ?? g.installedSize ?? 0), 0);
-  const totalStorageDisplay =
-    totalSizeBytes >= 1024 * 1024 * 1024 * 1024
-      ? `${(totalSizeBytes / (1024 * 1024 * 1024 * 1024)).toFixed(2)} TB`
-      : totalSizeBytes > 0
-      ? `${(totalSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-      : '0 GB';
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // General settings state
   const [startWithWindows, setStartWithWindows] = useState(false);
   const [minimizeToTray, setMinimizeToTray] = useState(true);
   const [rememberWindowSize, setRememberWindowSize] = useState(true);
-
-  // Library backup & maintenance state
-  const [backupStatus, setBackupStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-
-  // Library locations state
-  const [scanLocations, setScanLocations] = useState<string[]>([
-    'C:\\Games',
-    'D:\\Games',
-    'E:\\Games',
-    'F:\\Games',
-    'G:\\Games',
-  ]);
-  const [newPath, setNewPath] = useState('');
-  const [isScanningStandalone, setIsScanningStandalone] = useState(false);
-  const [scanResultFeedback, setScanResultFeedback] = useState<string | null>(null);
 
   // Auto-rescan state (v1.0.3)
   const [autoRescanEnabled, setAutoRescanEnabled] = useState(false);
@@ -93,6 +57,7 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
   const [lastAutoScanTime, setLastAutoScanTime] = useState<string | undefined>(undefined);
   const [nextAutoScanTime, setNextAutoScanTime] = useState<string | undefined>(undefined);
   const [isAutoScanning, setIsAutoScanning] = useState(false);
+  const [scanResultFeedback, setScanResultFeedback] = useState<string | null>(null);
 
   // Available drives state
   const [settingsDrives, setSettingsDrives] = useState<WindowsDrive[]>([]);
@@ -133,10 +98,6 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
     async function loadSavedLocations() {
       if (window.gameHub?.settings) {
         try {
-          const saved = await window.gameHub.settings.get<string[]>('scan_locations');
-          if (saved && Array.isArray(saved) && saved.length > 0) {
-            setScanLocations(saved);
-          }
           const savedTray = await window.gameHub.settings.get<boolean>('minimize_to_tray', true);
           if (typeof savedTray === 'boolean') {
             setMinimizeToTray(savedTray);
@@ -204,63 +165,6 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
   // Appearance
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>('dark');
   const [cardDensity, setCardDensity] = useState<'normal' | 'compact'>('normal');
-
-  const addLocation = async (pathToAdd?: string) => {
-    const target = (pathToAdd || newPath).trim();
-    if (target && !scanLocations.includes(target)) {
-      const updated = [...scanLocations, target];
-      setScanLocations(updated);
-      setNewPath('');
-      if (window.gameHub?.settings) {
-        await window.gameHub.settings.set('scan_locations', updated);
-      }
-    }
-  };
-
-  const handleBrowseFolder = async () => {
-    if (window.gameHub?.dialog) {
-      try {
-        const folder = await window.gameHub.dialog.selectFolder();
-        if (folder) {
-          addLocation(folder);
-        }
-      } catch (err: any) {
-        console.error('[Settings] Folder browse error:', err.message);
-      }
-    }
-  };
-
-  const removeLocation = async (pathToRemove: string) => {
-    const updated = scanLocations.filter((p) => p !== pathToRemove);
-    setScanLocations(updated);
-    if (window.gameHub?.settings) {
-      await window.gameHub.settings.set('scan_locations', updated);
-    }
-  };
-
-  const runStandaloneScan = async () => {
-    setIsScanningStandalone(true);
-    setScanResultFeedback(null);
-
-    if (window.gameHub?.games) {
-      try {
-        const res = await window.gameHub.games.scan();
-        setScanResultFeedback(
-          res.newGamesCount > 0
-            ? `Scan finished: Discovered and added ${res.newGamesCount} new standalone game(s)!`
-            : `Scan complete. No new unindexed games found in scanned locations.`
-        );
-      } catch (err: any) {
-        setScanResultFeedback(`Scan encountered an issue: ${err.message}`);
-      }
-    } else {
-      setTimeout(() => {
-        setScanResultFeedback('Simulated scan complete: 2 standalone games detected.');
-      }, 1000);
-    }
-
-    setIsScanningStandalone(false);
-  };
 
   const handleToggleAutoRescan = async (enabled: boolean) => {
     setAutoRescanEnabled(enabled);
@@ -355,14 +259,14 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
   };
 
   return (
-    <div className="space-y-6 pb-12 max-w-4xl">
+    <div className="space-y-6 pb-12 pt-6 max-w-4xl">
       {/* Settings Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-zinc-800 pb-3 overflow-x-auto">
         {[
           { id: 'general', label: 'General' },
-          { id: 'library', label: 'Library & Folders' },
+          { id: 'drives', label: 'Storage & Drives' },
+          { id: 'library', label: 'Library & Scanning' },
           { id: 'appearance', label: 'Appearance' },
-          { id: 'advanced', label: 'Storage & Backup' },
           { id: 'controller', label: 'Controller' },
         ].map((tab) => (
           <FocusableItem
@@ -405,7 +309,7 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
               <label className="flex items-center justify-between pt-3 cursor-pointer">
                 <div>
                   <p className="text-sm font-semibold text-zinc-200">Start with Windows</p>
-                  <p className="text-xs text-zinc-500">Launch GameHub automatically on PC boot.</p>
+                  <p className="text-xs text-zinc-500">Launch OmniPlay automatically on PC boot.</p>
                 </div>
                 <input
                   type="checkbox"
@@ -418,7 +322,7 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
               <label className="flex items-center justify-between pt-3 cursor-pointer">
                 <div>
                   <p className="text-sm font-semibold text-zinc-200">Close to System Tray</p>
-                  <p className="text-xs text-zinc-500">Closing the window keeps GameHub running in the background tray.</p>
+                  <p className="text-xs text-zinc-500">Closing the window keeps OmniPlay running in the background tray.</p>
                 </div>
                 <input
                   type="checkbox"
@@ -446,129 +350,28 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
                   className="w-4 h-4 accent-teal-500 rounded cursor-pointer"
                 />
               </label>
+
+              <div className="pt-4 border-t border-zinc-800/80">
+                <CardSizeControl variant="inline" />
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tab: Library & Folders */}
+      {/* Tab: Storage & Drives */}
+      {activeTab === 'drives' && (
+        <div className="space-y-4">
+          <Drives games={games} />
+        </div>
+      )}
+
+      {/* Tab: Library & Scanning */}
       {activeTab === 'library' && (
         <div className="space-y-4">
           <div className="p-6 rounded-2xl bg-surface-850 border border-zinc-800 space-y-5">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div>
-                <h3 className="font-bold text-base text-zinc-100 flex items-center gap-2">
-                  <FolderPlus className="w-4 h-4 text-teal-400" />
-                  Custom Game Scan Folders
-                </h3>
-                <p className="text-xs text-zinc-400">
-                  GameHub heuristically scans these directories and active drives for standalone PC games.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={runStandaloneScan}
-                disabled={isScanningStandalone}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-800 hover:bg-zinc-700 text-xs font-bold text-teal-400 border border-teal-500/30 transition-all cursor-pointer disabled:opacity-50 shadow-sm"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isScanningStandalone ? 'animate-spin' : ''}`} />
-                <span>{isScanningStandalone ? 'Scanning Library...' : 'Scan Now'}</span>
-              </button>
-            </div>
-
-            {/* Scan Feedback Alert */}
-            {scanResultFeedback && (
-              <div className="p-3.5 rounded-xl bg-teal-500/10 border border-teal-500/20 text-xs text-teal-300 flex items-center justify-between">
-                <span>{scanResultFeedback}</span>
-                <button
-                  type="button"
-                  onClick={() => setScanResultFeedback(null)}
-                  className="text-teal-400 hover:text-white font-bold ml-3"
-                >
-                  &times;
-                </button>
-              </div>
-            )}
-
-            {/* Add folder input with Browse */}
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newPath}
-                onChange={(e) => setNewPath(e.target.value)}
-                placeholder="e.g. D:\Games or E:\CustomLibrary"
-                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-teal-500/50"
-              />
-              <button
-                type="button"
-                onClick={handleBrowseFolder}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-surface-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-200 transition-all cursor-pointer"
-                title="Browse folder via file explorer"
-              >
-                <FolderOpen className="w-3.5 h-3.5 text-teal-400" />
-                <span>Browse</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => addLocation()}
-                className="px-4 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 font-bold text-xs transition-all shadow-md shadow-teal-500/10 cursor-pointer"
-              >
-                Add Folder
-              </button>
-            </div>
-
-            {/* Existing locations list */}
-            <div className="space-y-2">
-              {scanLocations.map((loc) => (
-                <div
-                  key={loc}
-                  className="flex items-center justify-between p-3 rounded-xl bg-zinc-900 border border-zinc-800/80 font-mono text-xs text-zinc-300"
-                >
-                  <span>{loc}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeLocation(loc)}
-                    className="text-zinc-500 hover:text-rose-400 transition-colors p-1"
-                    title="Remove folder"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Available Drives Checklist */}
-            <div className="pt-4 border-t border-zinc-800/80 space-y-3">
-              <h4 className="font-bold text-sm text-zinc-100 flex items-center gap-2">
-                <HardDrive className="w-4 h-4 text-teal-400" />
-                Available Drives
-              </h4>
-              <p className="text-xs text-zinc-400">
-                Check which detected drives GameHub automatically scans for games:
-              </p>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
-                {settingsDrives.map((d) => (
-                  <label
-                    key={d.letter}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700 cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={d.isIncluded}
-                      onChange={() => toggleDriveInclusion(d.letter)}
-                      className="w-4 h-4 accent-teal-500 rounded cursor-pointer"
-                    />
-                    <span className="font-bold font-mono text-xs text-teal-300">{d.letter}</span>
-                    <span className="text-[11px] text-zinc-400 truncate">{d.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
             {/* Automatic Game Rescan Section (v1.0.3) */}
-            <div className="pt-5 border-t border-zinc-800/80 space-y-4">
+            <div className="space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h4 className="font-bold text-sm text-zinc-100 flex items-center gap-2">
@@ -591,7 +394,7 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
                       ref={ref}
                       type="button"
                       onClick={handleTriggerAutoRescanNow}
-                      disabled={isAutoScanning || isScanningStandalone}
+                      disabled={isAutoScanning}
                       className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shadow-md shadow-teal-500/10 ${
                         isFocused ? 'controller-focus' : ''
                       }`}
@@ -602,6 +405,12 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
                   )}
                 </FocusableItem>
               </div>
+
+              {scanResultFeedback && (
+                <div className="p-3 rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-medium">
+                  {scanResultFeedback}
+                </div>
+              )}
 
               <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 space-y-4">
                 <FocusableItem
@@ -893,13 +702,13 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
                     <li className="flex items-start gap-2">
                       <span className="text-emerald-400 font-bold">✓</span>
                       <span>
-                        <strong className="text-zinc-200">Zero Passwords Requested:</strong> GameHub never asks for, captures, or stores your Steam password or Steam Guard codes.
+                        <strong className="text-zinc-200">Zero Passwords Requested:</strong> OmniPlay never asks for, captures, or stores your Steam password or Steam Guard codes.
                       </span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="text-emerald-400 font-bold">✓</span>
                       <span>
-                        <strong className="text-zinc-200">Native Browser Isolation:</strong> Official Valve links open directly in your trusted default browser (Chrome / Edge / Firefox) at <span className="text-zinc-300 font-mono">https://steamcommunity.com</span>. GameHub cannot see or access your browser session.
+                        <strong className="text-zinc-200">Native Browser Isolation:</strong> Official Valve links open directly in your trusted default browser (Chrome / Edge / Firefox) at <span className="text-zinc-300 font-mono">https://steamcommunity.com</span>. OmniPlay cannot see or access your browser session.
                       </span>
                     </li>
                     <li className="flex items-start gap-2">
@@ -968,354 +777,6 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
         </div>
       )}
 
-      {/* Tab: Advanced / Storage & Backup */}
-      {activeTab === 'advanced' && (
-        <div className="space-y-6">
-          {/* Header & Subtitle */}
-          <div className="p-6 rounded-2xl bg-surface-850 border border-zinc-800 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
-              <div>
-                <h3 className="font-bold text-lg text-zinc-100 flex items-center gap-2">
-                  <Database className="w-5 h-5 text-teal-400" />
-                  Storage, Database &amp; Library Health
-                </h3>
-                <p className="text-xs text-zinc-400 mt-1">
-                  System storage footprint, portable library backups, and diagnostic maintenance utilities.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onNavigate?.('help')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border border-teal-500/20 text-xs font-semibold transition-all self-start sm:self-auto cursor-pointer"
-              >
-                <HelpCircle className="w-4 h-4" />
-                <span>Help &amp; Documentation</span>
-              </button>
-            </div>
-
-            {/* Quick Overview Stats Row (Moved from Home) */}
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                System Storage &amp; Library Overview
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {/* Installed Games */}
-                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center gap-3.5">
-                  <div className="p-2.5 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20">
-                    <Gamepad2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">Installed Games</p>
-                    <div className="flex items-baseline gap-1.5">
-                      <p className="text-xl font-bold text-white font-['Outfit']">{installedGames.length}</p>
-                      {missingGamesCount > 0 && (
-                        <span className="text-[10px] font-medium text-amber-400 font-mono">
-                          ({missingGamesCount} missing)
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Total Playtime */}
-                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center gap-3.5">
-                  <div className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                    <Clock className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">Total Playtime</p>
-                    <p className="text-xl font-bold text-white font-['Outfit']">{playTimeDisplay}</p>
-                  </div>
-                </div>
-
-                {/* Storage Utilized */}
-                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center gap-3.5">
-                  <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    <Database className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">Storage Utilized</p>
-                    <p className="text-xl font-bold text-white font-['Outfit']">{totalStorageDisplay}</p>
-                  </div>
-                </div>
-
-                {/* Drives Detected */}
-                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center gap-3.5">
-                  <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <HardDrive className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">Drives Detected</p>
-                    <p className="text-xl font-bold text-white font-['Outfit']">{settingsDrives.length || 1} Drives Active</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Why Does This Section Exist? Guide Box */}
-            <div className="p-4 rounded-xl bg-teal-500/5 border border-teal-500/20 space-y-2">
-              <div className="flex items-center gap-2 text-teal-400 font-semibold text-xs">
-                <Info className="w-4 h-4 shrink-0" />
-                <span>Why does this section exist and when would you use it?</span>
-              </div>
-              <p className="text-xs text-zinc-300 leading-relaxed">
-                During normal everyday gaming, you <strong>never need to touch these tools</strong>. GameHub automatically indexes your games, updates playtime, and manages artwork in the background. This section exists for 4 specific real-world scenarios:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-xs text-zinc-400">
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/50">
-                  <span className="text-base shrink-0">💻</span>
-                  <div>
-                    <strong className="text-zinc-200 block">Moving to a New PC / Reinstalling Windows</strong>
-                    <span>Use <em>Export Library Backup</em> to save all custom categories, tags, and playtime to a JSON file and restore it in 1 second.</span>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/50">
-                  <span className="text-base shrink-0">💾</span>
-                  <div>
-                    <strong className="text-zinc-200 block">Freeing Up SSD Storage Space</strong>
-                    <span>Click <em>Clear Artwork Cache</em> to delete downloaded poster art if it grows too large on your drive.</span>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/50">
-                  <span className="text-base shrink-0">⚡</span>
-                  <div>
-                    <strong className="text-zinc-200 block">After a Sudden Crash or Power Loss</strong>
-                    <span>Use <em>Repair &amp; Optimize Database</em> to fix locked SQLite indexes, recover missing games, and speed up library loading.</span>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/50">
-                  <span className="text-base shrink-0">🔍</span>
-                  <div>
-                    <strong className="text-zinc-200 block">Troubleshooting Failed Launches</strong>
-                    <span>Open <em>gamehub.log</em> to see the exact error message or crash code when asking for support.</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Feedback Banner */}
-            {backupStatus && (
-              <div
-                className={`p-3 rounded-xl text-xs flex items-center justify-between gap-2 border ${
-                  backupStatus.type === 'success'
-                    ? 'bg-teal-500/10 border-teal-500/30 text-teal-300'
-                    : backupStatus.type === 'error'
-                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-300'
-                }`}
-              >
-                <span>{backupStatus.message}</span>
-                <button
-                  type="button"
-                  onClick={() => setBackupStatus(null)}
-                  className="text-zinc-500 hover:text-zinc-300 text-xs px-1 cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            {/* Sub-section 1: Library Backup & Migration */}
-            <div className="space-y-2 pt-2">
-              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                1. Library Backup &amp; Transfer
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* 1. Export Library Backup */}
-                <button
-                  type="button"
-                  disabled={isExporting}
-                  onClick={async () => {
-                    if (!window.gameHub?.backup?.export) {
-                      setBackupStatus({ type: 'error', message: 'Library export is only available in desktop mode.' });
-                      return;
-                    }
-                    setIsExporting(true);
-                    setBackupStatus(null);
-                    try {
-                      const res = await window.gameHub.backup.export();
-                      if (res.success) {
-                        setBackupStatus({
-                          type: 'success',
-                          message: `Backup created successfully! ${res.gamesCount} games exported to: ${res.filePath}`,
-                        });
-                      } else if (!res.cancelled) {
-                        setBackupStatus({ type: 'error', message: res.error || 'Failed to export backup.' });
-                      }
-                    } catch (err: any) {
-                      setBackupStatus({ type: 'error', message: err.message });
-                    } finally {
-                      setIsExporting(false);
-                    }
-                  }}
-                  className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
-                    <Download className="w-4 h-4 text-teal-400" />
-                    <span>{isExporting ? 'Exporting Backup...' : 'Export Library Backup'}</span>
-                  </div>
-                  <p className="text-[11px] text-zinc-400">Save library to gamehub-library.json for safe keeping or transfer</p>
-                </button>
-
-                {/* 2. Import Library Backup */}
-                <button
-                  type="button"
-                  disabled={isImporting}
-                  onClick={async () => {
-                    if (!window.gameHub?.backup?.import) {
-                      setBackupStatus({ type: 'error', message: 'Library import is only available in desktop mode.' });
-                      return;
-                    }
-                    setIsExporting(true);
-                    setBackupStatus(null);
-                    try {
-                      const res = await window.gameHub.backup.import();
-                      if (res.success) {
-                        setBackupStatus({
-                          type: 'success',
-                          message: `Backup imported! ${res.gamesImported} added, ${res.gamesUpdated} updated. Total library games: ${res.totalGames}.`,
-                        });
-                        onLibraryUpdated?.();
-                      } else if (!res.cancelled) {
-                        setBackupStatus({ type: 'error', message: res.error || 'Failed to import backup.' });
-                      }
-                    } catch (err: any) {
-                      setBackupStatus({ type: 'error', message: err.message });
-                    } finally {
-                      setIsImporting(false);
-                    }
-                  }}
-                  className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
-                    <Upload className="w-4 h-4 text-indigo-400" />
-                    <span>{isImporting ? 'Importing Backup...' : 'Import Library Backup'}</span>
-                  </div>
-                  <p className="text-[11px] text-zinc-400">Restore all custom categories, tags, and game titles from backup</p>
-                </button>
-              </div>
-            </div>
-
-            {/* Sub-section 2: Storage Cleanup & Maintenance */}
-            <div className="space-y-2 pt-2">
-              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                2. Storage Cleanup &amp; Database Health
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* 3. Clear Artwork Cache */}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (window.gameHub?.settings?.clearCache) {
-                      const res = await window.gameHub.settings.clearCache();
-                      if (res.success) {
-                        setBackupStatus({ type: 'success', message: 'Artwork cache cleared successfully. Images will re-download when viewed.' });
-                      } else {
-                        setBackupStatus({ type: 'error', message: res.error || 'Failed to clear cache.' });
-                      }
-                    } else {
-                      setBackupStatus({ type: 'info', message: 'Artwork cache cleanup is ready.' });
-                    }
-                  }}
-                  className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
-                    <Trash2 className="w-4 h-4 text-amber-400" />
-                    <span>Clear Artwork Cache (Free Up Space)</span>
-                  </div>
-                  <p className="text-[11px] text-zinc-400">Delete downloaded covers in %APPDATA%/GameHub to reclaim disk storage</p>
-                </button>
-
-                {/* 4. Repair & Optimize Database */}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (window.gameHub?.database?.repair) {
-                      try {
-                        setBackupStatus({ type: 'info', message: 'Verifying and repairing database...' });
-                        const res = await window.gameHub.database.repair();
-                        if (res.success) {
-                          setBackupStatus({ type: 'success', message: res.message });
-                          onLibraryUpdated?.();
-                        } else {
-                          setBackupStatus({ type: 'error', message: res.message });
-                        }
-                      } catch (err: any) {
-                        setBackupStatus({ type: 'error', message: err.message });
-                      }
-                    } else {
-                      setBackupStatus({ type: 'info', message: 'Database recovery engine verified.' });
-                    }
-                  }}
-                  className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
-                    <Database className="w-4 h-4 text-cyan-400" />
-                    <span>Repair &amp; Optimize Database</span>
-                  </div>
-                  <p className="text-[11px] text-zinc-400">Fix locked indexes, check data integrity, and vacuum SQLite database</p>
-                </button>
-              </div>
-            </div>
-
-            {/* Sub-section 3: Diagnostics & Troubleshooting */}
-            <div className="space-y-2 pt-2">
-              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                3. Diagnostics &amp; Troubleshooting
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* 5. Open Live gamehub.log File */}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (window.gameHub?.settings?.openLogFile) {
-                      const ok = await window.gameHub.settings.openLogFile();
-                      if (!ok) {
-                        setBackupStatus({ type: 'info', message: 'Log file will be created upon first recorded event.' });
-                      }
-                    }
-                  }}
-                  className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
-                    <FileText className="w-4 h-4 text-teal-400" />
-                    <span>Open Live gamehub.log</span>
-                  </div>
-                  <p className="text-[11px] text-zinc-400">View live diagnostic event log file and crash error messages</p>
-                </button>
-
-                {/* 6. View Application Logs Folder */}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (window.gameHub?.settings?.openLogs) {
-                      const ok = await window.gameHub.settings.openLogs();
-                      if (!ok) {
-                        setBackupStatus({ type: 'error', message: 'Could not open logs folder in Explorer.' });
-                      }
-                    } else {
-                      setBackupStatus({ type: 'info', message: 'Application logs folder is available in desktop app.' });
-                    }
-                  }}
-                  className="p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 text-left transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-2 text-sm font-semibold text-zinc-200 mb-1">
-                    <FolderOpen className="w-4 h-4 text-emerald-400" />
-                    <span>View Logs Directory</span>
-                  </div>
-                  <p className="text-[11px] text-zinc-400">Open %APPDATA%/GameHub/logs in Windows File Explorer</p>
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-zinc-800 text-xs text-zinc-500 flex items-center justify-between">
-              <span>{APP_CONFIG.name} v{APP_CONFIG.version}</span>
-              <span className="font-mono text-[11px] text-zinc-600">%APPDATA%\GameHub\gamehub.db</span>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Tab: Controller */}
       {activeTab === 'controller' && (
         <div className="space-y-5">
@@ -1328,7 +789,7 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
                   Controller & Gamepad Navigation
                 </h3>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Operate GameHub using your Xbox, PlayStation, or generic PC gamepad.
+                  Operate OmniPlay using your Xbox, PlayStation, or generic PC gamepad.
                 </p>
               </div>
 
@@ -1405,10 +866,10 @@ export const Settings: React.FC<SettingsProps> = ({ onLibraryUpdated, onNavigate
                   >
                     <div>
                       <p className="text-sm font-semibold text-zinc-200">
-                        Enable GameHub Controller Navigation
+                        Enable OmniPlay Controller Navigation
                       </p>
                       <p className="text-xs text-zinc-500">
-                        When enabled, GameHub listens for D-Pad, Thumbsticks, and standard buttons to navigate the UI.
+                        When enabled, OmniPlay listens for D-Pad, Thumbsticks, and standard buttons to navigate the UI.
                       </p>
                     </div>
                     <input

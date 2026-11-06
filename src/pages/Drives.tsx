@@ -85,7 +85,7 @@ export const Drives: React.FC<DrivesProps> = ({ games = [] }) => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 pt-6">
       {/* Header Banner */}
       <div className="p-6 rounded-2xl bg-surface-850 border border-zinc-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
         <div className="flex items-center gap-3">

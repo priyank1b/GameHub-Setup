@@ -3,6 +3,7 @@ import fs from 'fs';
 import { GameRepository, SettingsRepository } from '../../database/index';
 import { DriveService } from '../DriveService';
 import { GameCandidate, GameDetector, ScanProgress, ScanResult } from './types';
+import { CanonicalInstallSync } from './CanonicalInstallSync';
 
 export class GameScanner {
   private detectors: Map<string, GameDetector> = new Map();
@@ -13,7 +14,8 @@ export class GameScanner {
   constructor(
     private gameRepo: GameRepository,
     private settingsRepo: SettingsRepository,
-    private driveService: DriveService
+    private driveService: DriveService,
+    private canonicalSync?: CanonicalInstallSync
   ) {}
 
   /**
@@ -464,6 +466,16 @@ export class GameScanner {
         }
       }
     });
+
+      // Step 9b: Mirror installed candidates into the canonical library tables
+      // (what the Library UI actually reads), so Rescan reflects installed games immediately.
+      if (this.canonicalSync) {
+        try {
+          this.canonicalSync.sync(deduplicatedCandidates);
+        } catch (err: any) {
+          console.error('[GameScanner] Canonical install sync failed:', err.message);
+        }
+      }
 
       if (this.cancelRequested) return this.buildResult('cancelled', targetLocations.length, totalFoundCandidates, newGamesAdded, existingGamesUpdated, 0, startTime);
 

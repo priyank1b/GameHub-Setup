@@ -21,6 +21,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { FocusableItem } from '../components/FocusableItem';
+import { CardSizeControl } from '../components/CardSizeControl';
 
 interface LibraryProps {
   games: Game[];
@@ -38,6 +39,8 @@ interface LibraryProps {
   accounts?: LauncherAccount[];
   accountGameCounts?: Record<string, number>;
   onOpenAccounts?: () => void;
+  onRescan?: () => void;
+  isScanning?: boolean;
 }
 
 export const Library: React.FC<LibraryProps> = ({
@@ -56,9 +59,11 @@ export const Library: React.FC<LibraryProps> = ({
   accounts,
   accountGameCounts,
   onOpenAccounts,
+  onRescan,
+  isScanning = false,
 }) => {
   const [sortBy, setSortBy] = useState<SortOption>('name-asc');
-  const [viewMode, setViewMode] = useState<'SECTIONS' | 'GRID'>('SECTIONS');
+  const [viewMode, setViewMode] = useState<'SECTIONS' | 'GRID'>('GRID');
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   const missingGamesCount = useMemo(() => games.filter((g) => !g.isInstalled).length, [games]);
@@ -66,8 +71,9 @@ export const Library: React.FC<LibraryProps> = ({
 
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'INSTALLED' | 'AVAILABLE'>('ALL');
 
-  // Synchronize statusFilter when parent filter changes
+  // Synchronize statusFilter and default viewMode to GRID when parent filter/menu changes
   useEffect(() => {
+    setViewMode('GRID');
     if (currentFilter === 'INSTALLED') {
       setStatusFilter('INSTALLED');
     } else if (currentFilter === 'AVAILABLE') {
@@ -454,10 +460,11 @@ export const Library: React.FC<LibraryProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Filter and Sort Toolbar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl bg-surface-850 border border-zinc-800/80">
-        {/* Left Side: Filter Trigger, Quick Tabs & Active Filter Chips */}
-        <div className="flex items-center flex-wrap gap-2 relative">
+      {/* Sticky Filter and Sort Toolbar - Flush against TopBar with solid backdrop */}
+      <div className="sticky top-0 z-30 -mx-8 px-8 pt-4 pb-3 bg-surface-900 border-b border-zinc-800/80 shadow-lg">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-3.5 px-4 rounded-2xl bg-surface-850 border border-zinc-800/80 shadow-sm">
+          {/* Left Side: Filter Trigger, Quick Tabs & Active Filter Chips */}
+          <div className="flex items-center flex-wrap gap-2 relative">
           {/* Main Filter Dropdown Trigger Button */}
           <FocusableItem
             id="library-filter-trigger"
@@ -494,40 +501,6 @@ export const Library: React.FC<LibraryProps> = ({
                     isFilterOpen ? 'rotate-180' : ''
                   }`}
                 />
-              </button>
-            )}
-          </FocusableItem>
-
-          {/* Quick Tab: All Games */}
-          <FocusableItem
-            id="filter-quick-all"
-            scope="main"
-            group="filters"
-            onConfirm={() => onFilterChange('ALL')}
-          >
-            {({ ref, isFocused }) => (
-              <button
-                ref={ref}
-                type="button"
-                onClick={() => onFilterChange('ALL')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                  isFocused ? 'controller-focus' : ''
-                } ${
-                  currentFilter === 'ALL'
-                    ? 'bg-teal-500 text-zinc-950 font-bold shadow-md shadow-teal-500/20'
-                    : 'bg-zinc-900/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
-                }`}
-              >
-                <span>All Games</span>
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                    currentFilter === 'ALL'
-                      ? 'bg-zinc-950 text-white'
-                      : 'bg-zinc-800 text-zinc-400'
-                  }`}
-                >
-                  {games.length}
-                </span>
               </button>
             )}
           </FocusableItem>
@@ -866,6 +839,9 @@ export const Library: React.FC<LibraryProps> = ({
             </button>
           </div>
 
+          {/* Card Size Density Stepper */}
+          <CardSizeControl variant="compact" />
+
           {/* Quick Collapse / Expand All button in Sections mode */}
           {viewMode === 'SECTIONS' && sections.length > 1 && (
             <button
@@ -902,6 +878,7 @@ export const Library: React.FC<LibraryProps> = ({
           </div>
         </div>
       </div>
+    </div>
 
       {/* Main Content Area */}
       {filteredGames.length > 0 || (viewMode === 'SECTIONS' && sections.length > 0) ? (
@@ -1090,19 +1067,35 @@ export const Library: React.FC<LibraryProps> = ({
       ) : (
         <EmptyState
           title={
-            currentFilter === 'MISSING'
+            games.length === 0
+              ? 'No Games Discovered Yet'
+              : currentFilter === 'MISSING'
               ? 'No Missing Games'
               : 'No Games Found'
           }
           description={
-            currentFilter === 'MISSING'
+            games.length === 0
+              ? 'Scan your PC to automatically discover all installed games across your drives, Steam, Epic Games, and GOG libraries.'
+              : currentFilter === 'MISSING'
               ? 'All installed games have verified file paths on disk.'
               : searchQuery
               ? `No games match the search term "${searchQuery}".`
               : `No games currently found under the ${currentFilter} filter.`
           }
-          actionLabel="Reset Filters"
-          onAction={() => onFilterChange('ALL')}
+          actionLabel={
+            games.length === 0 && onRescan
+              ? isScanning
+                ? 'Scanning Drives...'
+                : 'Scan PC for Games'
+              : 'Reset Filters'
+          }
+          onAction={
+            games.length === 0 && onRescan
+              ? isScanning
+                ? undefined
+                : onRescan
+              : () => onFilterChange('ALL')
+          }
         />
       )}
     </div>

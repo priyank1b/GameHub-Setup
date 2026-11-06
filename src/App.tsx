@@ -21,7 +21,7 @@ import { Loader2, Gamepad2 } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<PageRoute>('home');
-  const [currentFilter, setCurrentFilter] = useState<LibraryFilter>('INSTALLED');
+  const [currentFilter, setCurrentFilter] = useState<LibraryFilter>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [games, setGames] = useState<Game[]>([]);
   const [accounts, setAccounts] = useState<LauncherAccount[]>([]);
@@ -77,7 +77,7 @@ export const App: React.FC = () => {
 
   // Cycle navigation pages with controller bumpers (LB / RB)
   useEffect(() => {
-    const pages: PageRoute[] = ['home', 'library', 'favorites', 'recently-played', 'drives', 'help', 'settings'];
+    const pages: PageRoute[] = ['home', 'library', 'favorites', 'recently-played', 'settings'];
     setOnTabChange((direction) => {
       setCurrentPage((prev) => {
         const idx = pages.indexOf(prev);
@@ -485,6 +485,24 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleClearCacheAndRescan = async () => {
+    if (isScanningRef.current || isScanning) {
+      console.log('[App] Clear cache & rescan ignored: scan already actively in progress.');
+      return;
+    }
+
+    setLaunchMessage('Clearing artwork & metadata cache...');
+    try {
+      if (window.gameHub?.settings?.clearCache) {
+        await window.gameHub.settings.clearCache();
+      }
+    } catch (err: any) {
+      console.warn('[App] Failed to clear cache before rescan:', err.message);
+    }
+
+    await handleRescan();
+  };
+
   // Listen to System Tray events (e.g. Rescan, Recently Played navigation)
   useEffect(() => {
     const unsubNav = window.gameHub?.tray?.onNavigate?.((page) => {
@@ -643,6 +661,8 @@ export const App: React.FC = () => {
     setCurrentPage(page);
     if (filter) {
       setCurrentFilter(filter);
+    } else if (page === 'library') {
+      setCurrentFilter('ALL');
     }
   };
 
@@ -778,9 +798,11 @@ export const App: React.FC = () => {
           }}
           onNavigate={handleNavigate}
           onRescan={handleRescan}
+          onClearCacheAndRescan={handleClearCacheAndRescan}
           onAddGame={() => setIsAddGameOpen(true)}
           onOpenAccounts={() => setIsAccountManagerOpen(true)}
           isScanning={isScanning}
+          gameCount={games.length}
         />
 
         {/* Dynamic Launch Toast Alert */}
@@ -792,7 +814,7 @@ export const App: React.FC = () => {
         )}
 
         {/* Scrollable Page Body */}
-        <main className="flex-1 overflow-y-auto px-8 py-6">
+        <main className="flex-1 overflow-y-auto px-8 pb-6">
           {currentPage === 'home' && (
             <Home
               games={games}
@@ -808,6 +830,9 @@ export const App: React.FC = () => {
               onLocate={handleLocateGame}
               onRemove={handleRemoveGame}
               onHide={handleHideGame}
+              onRescan={handleRescan}
+              isScanning={isScanning}
+              onOpenAccounts={() => setIsAccountManagerOpen(true)}
             />
           )}
 
@@ -831,6 +856,8 @@ export const App: React.FC = () => {
               accounts={accounts}
               accountGameCounts={accountGameCounts}
               onOpenAccounts={() => setIsAccountManagerOpen(true)}
+              onRescan={handleRescan}
+              isScanning={isScanning}
             />
           )}
 
@@ -857,7 +884,18 @@ export const App: React.FC = () => {
             />
           )}
 
-          {currentPage === 'drives' && <Drives games={games} />}
+          {currentPage === 'drives' && (
+            <Settings
+              games={games}
+              initialTab="drives"
+              onLibraryUpdated={() => {
+                loadGames();
+                loadAccounts();
+              }}
+              onNavigate={handleNavigate}
+              onClearCacheAndRescan={handleClearCacheAndRescan}
+            />
+          )}
 
           {currentPage === 'help' && (
             <Help
@@ -874,6 +912,7 @@ export const App: React.FC = () => {
                 loadAccounts();
               }}
               onNavigate={handleNavigate}
+              onClearCacheAndRescan={handleClearCacheAndRescan}
             />
           )}
         </main>

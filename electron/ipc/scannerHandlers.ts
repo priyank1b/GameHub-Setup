@@ -11,14 +11,22 @@ import { GameScanner } from '../services/scanner/GameScanner';
 import { StorageResolver } from '../services/scanner/StorageResolver';
 import { AutoRescanService } from '../services/scanner/AutoRescanService';
 import { GameCandidate, ScanProgress, ScanResult } from '../services/scanner/types';
+import { CanonicalInstallSync } from '../services/scanner/CanonicalInstallSync';
+import type { Database } from 'better-sqlite3';
 import path from 'path';
 
 export function registerScannerHandlers(
   gameRepo: GameRepository,
   settingsRepo: SettingsRepository,
-  driveService: DriveService
+  driveService: DriveService,
+  db?: Database
 ): { autoRescanService: AutoRescanService; storageResolver: StorageResolver } {
-  const gameScanner = new GameScanner(gameRepo, settingsRepo, driveService);
+  const gameScanner = new GameScanner(
+    gameRepo,
+    settingsRepo,
+    driveService,
+    db ? new CanonicalInstallSync(db) : undefined
+  );
   const storageResolver = new StorageResolver(gameRepo);
   const autoRescanService = new AutoRescanService(gameScanner, settingsRepo);
   autoRescanService.initialize();

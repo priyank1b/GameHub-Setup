@@ -56,7 +56,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 680,
     backgroundColor: '#09090b',
-    title: 'GameHub',
+    title: 'OmniPlay',
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
     autoHideMenuBar: true,
     frame: false,
@@ -192,8 +192,10 @@ if (!gotTheLock) {
   app.on('second-instance', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
-      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.show();
       mainWindow.focus();
+      mainWindow.setAlwaysOnTop(true);
+      mainWindow.setAlwaysOnTop(false);
       mainWindow.webContents.focus();
       if (process.platform === 'win32') {
         mainWindow.webContents.invalidate();
