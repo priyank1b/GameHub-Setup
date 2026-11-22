@@ -4,6 +4,16 @@ import { GameRepository, SettingsRepository } from '../../database/index';
 import { DriveService } from '../DriveService';
 import { GameCandidate, GameDetector, ScanProgress, ScanResult } from './types';
 import { CanonicalInstallSync } from './CanonicalInstallSync';
+import { checkFolderHasExecutable, isProtectedLauncher } from './ExecutableCheck';
+
+// Launchers whose detectors read the launcher's own install records (manifests/registry),
+// so "not reported" reliably means "not installed".
+const AUTHORITATIVE_DETECTORS: Record<string, string> = {
+  'Steam Detector': 'STEAM',
+  'Epic Games Detector': 'EPIC',
+  'GOG Detector': 'GOG',
+  'Ubisoft Detector': 'UBISOFT',
+};
 
 export class GameScanner {
   private detectors: Map<string, GameDetector> = new Map();
@@ -150,6 +160,7 @@ export class GameScanner {
 
       // Step 4 & 5: Run Detectors & Generate Candidates
       const rawCandidates: GameCandidate[] = [];
+      const scannedLaunchers = new Set<string>();
       const activeDetectors = Array.from(this.detectors.values());
       const totalDetectors = activeDetectors.length;
 
@@ -189,6 +200,12 @@ export class GameScanner {
         );
 
         rawCandidates.push(...detected);
+        // Only trust "not reported => uninstalled" when the detector actually found its
+        // launcher's installs; an empty result may mean the launcher could not be located.
+        const authLauncher = AUTHORITATIVE_DETECTORS[detector.name];
+        if (authLauncher && detected.some((c) => c.launcher === authLauncher)) {
+          scannedLaunchers.add(authLauncher);
+        }
       }
 
       if (this.cancelRequested) return this.buildResult('cancelled', targetLocations.length, rawCandidates.length, 0, 0, 0, startTime);
@@ -203,7 +220,12 @@ export class GameScanner {
         foundCount: totalFoundCandidates,
       });
 
-      const deduplicatedCandidates = this.deduplicateCandidates(rawCandidates);
+      // Only folders that really contain a game executable count as installed games.
+      // This drops leftovers (uninstalled games whose folder still holds saves/mods),
+      // stale launcher manifests and empty/partial download folders.
+      const deduplicatedCandidates = this.deduplicateCandidates(rawCandidates).filter((cand) =>
+        this.candidateHasExecutable(cand)
+      );
 
       // Step 8: Compare with Database
       this.emitProgress({
@@ -471,13 +493,31 @@ export class GameScanner {
       // (what the Library UI actually reads), so Rescan reflects installed games immediately.
       if (this.canonicalSync) {
         try {
-          this.canonicalSync.sync(deduplicatedCandidates);
+          // Same bar as the legacy table: launcher-confirmed installs, or standalone
+          // heuristics with high confidence. Low-confidence guesses stay out of the library.
+          this.canonicalSync.sync(
+            deduplicatedCandidates.filter(
+              (c) => (c.launcher !== 'STANDALONE' && c.launcher !== 'UNKNOWN') || c.confidence >= 80
+            )
+          );
         } catch (err: any) {
           console.error('[GameScanner] Canonical install sync failed:', err.message);
         }
       }
 
       if (this.cancelRequested) return this.buildResult('cancelled', targetLocations.length, totalFoundCandidates, newGamesAdded, existingGamesUpdated, 0, startTime);
+
+      // Step 9c: Installs the launcher no longer reports are gone (canonical library tables)
+      if (this.canonicalSync) {
+        try {
+          missingGamesMarked += this.canonicalSync.markUnseen(deduplicatedCandidates, scannedLaunchers, availableLetters);
+        } catch (err: any) {
+          console.error('[GameScanner] Marking unseen installations failed:', err.message);
+        }
+      }
+      const seenOfficial = new Set(
+        deduplicatedCandidates.map((c) => `${c.launcher}|${this.normalizePath(c.installPath)}`)
+      );
 
       // Step 10: Mark Missing Games (Safely)
       this.emitProgress({
@@ -493,26 +533,20 @@ export class GameScanner {
         // If the drive is currently connected to the PC:
         if (availableLetters.has(gameDrive)) {
           let exists = false;
-          if (game.executablePath) {
-            if (fs.existsSync(game.executablePath)) {
-              exists = true;
-            } else if (game.launcher === 'STEAM' && game.launcherAppId && game.installPath) {
-              const steamappsDir = path.resolve(game.installPath, '..', '..');
-              const acfPath = path.join(steamappsDir, `appmanifest_${game.launcherAppId}.acf`);
-              if (fs.existsSync(acfPath)) {
-                exists = true;
-              }
-            }
+          if (
+            scannedLaunchers.has(game.launcher) &&
+            game.installPath &&
+            !seenOfficial.has(`${game.launcher}|${this.normalizePath(game.installPath)}`)
+          ) {
+            exists = false; // launcher no longer reports this install
+          } else if (game.executablePath && fs.existsSync(game.executablePath)) {
+            exists = true;
           } else if (game.installPath) {
-            if (fs.existsSync(game.installPath)) {
-              try {
-                const files = fs.readdirSync(game.installPath);
-                exists = files.length > 0;
-              } catch {
-                // Inaccessible folder (e.g. protected WindowsApps) - if it exists on disk, treat as installed
-                exists = true;
-              }
-            }
+            const check = checkFolderHasExecutable(game.installPath);
+            // Protected folders (e.g. WindowsApps) cannot be listed: trust that they exist.
+            exists = check === 'FOUND' || (check === 'ACCESS_DENIED' && isProtectedLauncher(game.launcher));
+          } else if (isProtectedLauncher(game.launcher)) {
+            exists = true; // nothing to verify against; leave to the Xbox detector
           }
 
           // Path is on an active connected drive but files were deleted or moved
@@ -559,6 +593,25 @@ export class GameScanner {
       this.isScanRunning = false;
       this.cancelRequested = false;
     }
+  }
+
+  /**
+   * True when the candidate's folder contains a runnable .exe.
+   * Xbox / Microsoft Store installs live in protected folders we may not be allowed
+   * to list; those are kept when the folder exists but is access-denied.
+   */
+  private candidateHasExecutable(cand: GameCandidate): boolean {
+    if (cand.executablePath) {
+      try {
+        if (fs.statSync(cand.executablePath).isFile()) return true;
+      } catch {}
+    }
+    const check = checkFolderHasExecutable(cand.installPath);
+    if (check === 'FOUND') return true;
+    // Protected (Xbox) installs: only drop when we could read the folder and it had no exe.
+    if (isProtectedLauncher(cand.launcher) && check !== 'NONE') return true;
+    console.log(`[GameScanner] Skipping "${cand.name}" (${cand.launcher}): no game executable in "${cand.installPath}" (${check}).`);
+    return false;
   }
 
   /**

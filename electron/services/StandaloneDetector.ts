@@ -50,6 +50,9 @@ export class StandaloneDetector implements GameDetector {
     'microsoft',
     'msi',
     'common files',
+    // Steam-managed content: the Steam detector owns it. Copies Steam no longer
+    // lists (removed libraries / leftovers) must not resurface as standalone games.
+    'steamapps',
   ]);
 
   // Blacklisted executable names / prefixes (case-insensitive)

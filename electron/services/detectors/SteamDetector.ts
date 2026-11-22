@@ -1,12 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
-import util from 'util';
 import { GameCandidate, GameDetector } from '../scanner/types';
 import { DriveService } from '../DriveService';
 import { SteamMetadataService } from '../SteamMetadataService';
-
-const execAsync = util.promisify(exec);
+import { locateSteam } from '../SteamLocator';
 
 export class SteamDetector implements GameDetector {
   public readonly name = 'Steam Detector';
@@ -130,132 +127,29 @@ export class SteamDetector implements GameDetector {
   }
 
   /**
-   * Discovers all Steam library folders via Windows Registry and active drives
+   * Discovers all Steam library folders (registry via reg.exe, libraryfolders.vdf in
+   * both modern and legacy formats, and a sweep of common folders on every drive).
    */
   public async discoverSteamLibraryFolders(): Promise<string[]> {
-    const libraryPaths = new Set<string>();
-
-    // 1. Check Windows Registry for primary SteamPath
-    let primarySteamPath = await this.queryRegistrySteamPath();
-
-    // Fallback standard locations on C:
-    if (!primarySteamPath || !fs.existsSync(primarySteamPath)) {
-      const standardPaths = [
-        'C:\\Program Files (x86)\\Steam',
-        'C:\\Program Files\\Steam',
-        'C:\\Steam',
-      ];
-      for (const p of standardPaths) {
-        if (fs.existsSync(p)) {
-          primarySteamPath = p;
-          break;
-        }
-      }
-    }
-
-    if (primarySteamPath && fs.existsSync(primarySteamPath)) {
-      this.primarySteamPath = path.resolve(primarySteamPath);
-      libraryPaths.add(this.normalizeLibraryPath(primarySteamPath));
-      // Parse libraryfolders.vdf in primary steamapps
-      const vdfPath = path.join(primarySteamPath, 'steamapps', 'libraryfolders.vdf');
-      if (fs.existsSync(vdfPath)) {
-        this.parseLibraryFoldersVdf(vdfPath, libraryPaths);
-      }
-    }
-
-    // 2. Scan all active Windows drives for SteamLibrary or Steam directories
-    // If libraryfolders.vdf was found in the primary Steam installation, it already lists all registered libraries.
-    // Only perform heuristic drive scan if no external libraries were discovered from libraryfolders.vdf.
-    if (libraryPaths.size <= 1) {
-      try {
-        const drives = this.driveService
-          ? await this.driveService.getAvailableDrives()
-          : 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((c) => ({ mountPath: `${c}:\\`, isIncluded: true }));
-
-        for (const drive of drives) {
-          if (!drive.isIncluded) continue;
-
-          const candidatesOnDrive = [
-            path.join(drive.mountPath, 'SteamLibrary'),
-            path.join(drive.mountPath, 'Steam'),
-            path.join(drive.mountPath, 'Program Files (x86)', 'Steam'),
-            path.join(drive.mountPath, 'Games', 'SteamLibrary'),
-          ];
-
-          for (const dir of candidatesOnDrive) {
-            if (fs.existsSync(dir)) {
-              const vdf = path.join(dir, 'steamapps', 'libraryfolders.vdf');
-              if (fs.existsSync(vdf)) {
-                libraryPaths.add(this.normalizeLibraryPath(dir));
-                this.parseLibraryFoldersVdf(vdf, libraryPaths);
-              }
-            }
-          }
-        }
-      } catch (err: any) {
-        console.warn('[SteamDetector] Drive inspection error:', err.message);
-      }
-    }
-
-    return Array.from(libraryPaths);
-  }
-
-  private normalizeLibraryPath(p: string): string {
-    const resolved = path.resolve(p);
-    return resolved.charAt(0).toUpperCase() + resolved.slice(1);
-  }
-
-  /**
-   * Queries Windows Registry for Steam installation directory
-   */
-  private async queryRegistrySteamPath(): Promise<string | null> {
+    let driveRoots: string[] | undefined;
     try {
-      const cmd = `powershell -NoProfile -NonInteractive -Command "Get-ItemProperty -Path 'HKCU:\\Software\\Valve\\Steam' -Name 'SteamPath' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty SteamPath"`;
-      const { stdout } = await execAsync(cmd, { timeout: 3000 });
-      if (stdout && stdout.trim()) {
-        return stdout.trim().replace(/\//g, '\\');
-      }
-    } catch {}
-
-    try {
-      const cmd64 = `powershell -NoProfile -NonInteractive -Command "Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\WOW6432Node\\Valve\\Steam' -Name 'InstallPath' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty InstallPath"`;
-      const { stdout } = await execAsync(cmd64, { timeout: 3000 });
-      if (stdout && stdout.trim()) {
-        return stdout.trim().replace(/\//g, '\\');
-      }
-    } catch {}
-
-    return null;
-  }
-
-  /**
-   * Parses libraryfolders.vdf to find all Steam library paths
-   */
-  private parseLibraryFoldersVdf(vdfPath: string, pathsSet: Set<string>): void {
-    try {
-      const content = fs.readFileSync(vdfPath, 'utf-8');
-      // Matches: "path" "D:\\SteamLibrary"
-      const regex = /"path"\s+"([^"]+)"/gi;
-      let match: RegExpExecArray | null;
-
-      while ((match = regex.exec(content)) !== null) {
-        const rawPath = match[1].replace(/\\\\/g, '\\');
-        if (rawPath && fs.existsSync(rawPath)) {
-          pathsSet.add(this.normalizeLibraryPath(rawPath));
-        }
-      }
-
-      // Collect officially installed app IDs from this libraryfolders.vdf
-      const appMatches = content.matchAll(/"apps"\s*\{([^}]*)\}/gi);
-      for (const appBlock of appMatches) {
-        const idMatches = appBlock[1].matchAll(/"(\d+)"\s+"(\d+)"/g);
-        for (const idMatch of idMatches) {
-          this.officialInstalledAppIds.add(idMatch[1]);
-        }
+      if (this.driveService) {
+        // Use every connected drive for Steam: libraries are authoritative, so
+        // drive exclusions (meant for the heuristic folder scan) should not hide them.
+        const drives = await this.driveService.getAvailableDrives();
+        driveRoots = drives.map((d) => d.mountPath);
       }
     } catch (err: any) {
-      console.warn(`[SteamDetector] Failed reading "${vdfPath}":`, err.message);
+      console.warn('[SteamDetector] Drive listing failed, probing all letters:', err.message);
     }
+
+    const location = await locateSteam(driveRoots);
+    this.primarySteamPath = location.clientPath;
+    location.listedAppIds.forEach((id) => this.officialInstalledAppIds.add(id));
+    if (!location.clientPath) {
+      console.warn('[SteamDetector] Steam client folder not found (registry + common paths).');
+    }
+    return location.libraryPaths;
   }
 
   /**

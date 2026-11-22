@@ -2,6 +2,14 @@
 
 All notable changes to OmniPlay (formerly GameHub) are documented in this file.
 
+## [2.0.3] - 2026-11-22
+
+### Fixed
+- **Steam not detected on some PCs**: Steam lookup now uses `reg.exe` (HKCU + 64/32-bit HKLM) instead of a PowerShell call with a 3s timeout that often expired, looks for the Steam client in Program Files / `Steam` folders on every drive, and reads legacy (pre-2021) `libraryfolders.vdf`. Steam's own library list is authoritative: libraries removed from Steam (orphaned copies) are ignored, and a drive sweep (recognising libraries by `steamapps` content / `libraryfolder.vdf`) runs only when that list is unavailable. Drive exclusions no longer hide Steam libraries. The standalone detector skips `steamapps` folders so orphaned Steam copies cannot return as standalone games. Shared by the scanner and the Steam account provider (`electron/services/SteamLocator.ts`).
+- **Phantom games**: a scan result only counts as installed when its folder contains a real game `.exe` (uninstallers/redistributables ignored). Leftover folders, stale manifests and partial downloads are skipped, and games whose exe disappears are marked not installed. Xbox installs in protected folders are exempt when they cannot be read.
+- **Uninstalled games kept showing after a rescan**: a rescan now marks Steam / Epic / GOG / Ubisoft installs that the launcher no longer reports (on connected drives) as missing, instead of only ever adding installs. Skipped when a launcher returns no games at all, so a failed lookup cannot wipe the library.
+- **Low-confidence standalone guesses in the Library**: the canonical library sync now uses the same >= 80% bar as the legacy table.
+
 ## [2.0.2] - 2026-11-06
 
 ### Fixed

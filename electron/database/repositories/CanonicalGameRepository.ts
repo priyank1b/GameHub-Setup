@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { checkFolderHasExecutable } from '../../services/scanner/ExecutableCheck';
 import { Database } from 'better-sqlite3';
 import {
   CanonicalGame,
@@ -30,16 +31,16 @@ export class CanonicalGameRepository {
       }
     }
 
-    if (inst.installPath && fs.existsSync(inst.installPath)) {
-      try {
-        const files = fs.readdirSync(inst.installPath);
-        if (files.length > 0) return true;
-      } catch {
-        return true;
-      }
-    }
+    // Cheapest first: the known executable is still there
     if (inst.executablePath && fs.existsSync(inst.executablePath)) {
       return true;
+    }
+    if (inst.installPath) {
+      // A folder only counts when it still holds a game .exe; leftover folders
+      // (saves, shader cache, mods after uninstall) are not installs.
+      const check = checkFolderHasExecutable(inst.installPath);
+      // Protected folders (WindowsApps) cannot be listed: trust them
+      return check === 'FOUND' || check === 'ACCESS_DENIED';
     }
     return false;
   }
