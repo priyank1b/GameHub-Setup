@@ -76,6 +76,26 @@ export class CanonicalInstallSync {
     ]);
   }
 
+  /**
+   * Marks installations as MISSING when their launcher was scanned successfully but
+   * no longer reports them (uninstalled, moved, or a library removed from the launcher).
+   * Only applies to drives that are connected, so unplugged drives keep their games.
+   */
+  public markUnseen(found: GameCandidate[], scannedLaunchers: Set<string>, connectedDrives: Set<string>): number {
+    const seen = new Set(found.map((c) => `${c.launcher}|${this.norm(c.installPath)}`));
+    let marked = 0;
+    for (const inst of this.installRepo.getAll()) {
+      if (inst.status !== 'INSTALLED' || !scannedLaunchers.has(inst.launcher)) continue;
+      const drive = (inst.installPath || inst.executablePath || '').slice(0, 2).toUpperCase();
+      if (!/^[A-Z]:$/.test(drive) || !connectedDrives.has(drive)) continue;
+      if (seen.has(`${inst.launcher}|${this.norm(inst.installPath)}`)) continue;
+      this.installRepo.update(inst.id, { status: 'MISSING', lastVerifiedAt: new Date().toISOString() });
+      marked++;
+    }
+    if (marked) console.log(`[CanonicalInstallSync] Marked ${marked} installation(s) no longer reported by their launcher as MISSING.`);
+    return marked;
+  }
+
   /** Returns number of installations created or updated. */
   public sync(candidates: GameCandidate[]): number {
     let changed = 0;

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { findSteamClientPath, locateSteam } from '../SteamLocator';
 import { shell } from 'electron';
 import { exec } from 'child_process';
 import util from 'util';
@@ -89,35 +90,8 @@ export class SteamLauncherProvider implements ILauncherProvider {
     if (this.steamPath && fs.existsSync(this.steamPath)) {
       return this.steamPath;
     }
-
-    try {
-      const cmd = `powershell -NoProfile -NonInteractive -Command "Get-ItemProperty -Path 'HKCU:\\Software\\Valve\\Steam' -Name 'SteamPath' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty SteamPath"`;
-      const { stdout } = await execAsync(cmd, { timeout: 3000 });
-      if (stdout && stdout.trim()) {
-        const p = stdout.trim().replace(/\//g, '\\');
-        if (fs.existsSync(p)) {
-          this.steamPath = p;
-          return p;
-        }
-      }
-    } catch {}
-
-    const standardPaths = [
-      'C:\\Program Files (x86)\\Steam',
-      'C:\\Program Files\\Steam',
-      'C:\\Steam',
-      'D:\\Steam',
-      'E:\\Steam',
-    ];
-
-    for (const p of standardPaths) {
-      if (fs.existsSync(p)) {
-        this.steamPath = p;
-        return p;
-      }
-    }
-
-    return null;
+    this.steamPath = await findSteamClientPath();
+    return this.steamPath;
   }
 
   public async identifyConnectedAccounts(): Promise<DiscoveredAccount[]> {
@@ -175,20 +149,10 @@ export class SteamLauncherProvider implements ILauncherProvider {
     const libraryPaths = new Set<string>();
     libraryPaths.add(steamDir);
 
-    const vdfPath = path.join(steamDir, 'steamapps', 'libraryfolders.vdf');
-    if (fs.existsSync(vdfPath)) {
-      try {
-        const content = fs.readFileSync(vdfPath, 'utf8');
-        const regex = /"path"\s+"([^"]+)"/gi;
-        let match: RegExpExecArray | null;
-        while ((match = regex.exec(content)) !== null) {
-          const raw = match[1].replace(/\\\\/g, '\\');
-          if (fs.existsSync(raw)) {
-            libraryPaths.add(raw);
-          }
-        }
-      } catch {}
-    }
+    try {
+      const location = await locateSteam();
+      location.libraryPaths.forEach((p) => libraryPaths.add(p));
+    } catch {}
 
     // Check if account has local userdata on this PC
     const steamIdBig = BigInt(account.externalAccountId || '0');
