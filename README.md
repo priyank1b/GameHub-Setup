@@ -1,6 +1,6 @@
 # OmniPlay 🎮 — All-in-One PC Game Launcher
 
-[![Release](https://img.shields.io/badge/release-v2.0.2-teal.svg)](https://github.com/priyank1b/GameHub-Setup/releases)
+[![Release](https://img.shields.io/badge/release-v2.0.3-teal.svg)](https://github.com/priyank1b/GameHub-Setup/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](https://github.com/priyank1b/GameHub-Setup)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Framework](https://img.shields.io/badge/Electron-33.x-47848F.svg)](https://www.electronjs.org/)
@@ -14,6 +14,10 @@
 
 ## ✨ Features
 
+- 🎯 **Accurate Installed Games (v2.0.3)**:
+  - Steam games are found reliably on every PC, across all Steam libraries on all drives, including PCs where the Steam folder couldn't be located before.
+  - Only folders that contain a real game executable count as installed, so leftover folders no longer appear as games.
+  - Rescans now remove games you have uninstalled, and games in libraries removed from Steam no longer show up.
 - 🔧 **More Reliable Game Detection (v2.0.2)**:
   - Rescans now show newly installed games in the Library right away, and they no longer appear under Install after Sync All.
   - Fresh Steam installs are detected even before Steam adds them to `libraryfolders.vdf`.
